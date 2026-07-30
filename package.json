@@ -1,0 +1,55 @@
+{
+  "name": "@surea11y/test-matchers",
+  "version": "1.0.0",
+  "description": "Accessibility matcher for surea11y -- assert expect(container).toHaveNoA11yViolations() in jsdom-based component/unit tests, under Jest or Vitest.",
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "author": "Jorge Rumoroso",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rumoroso/surea11y-core-test-matchers.git"
+  },
+  "homepage": "https://github.com/rumoroso/surea11y-core-test-matchers#readme",
+  "bugs": {
+    "url": "https://github.com/rumoroso/surea11y-core-test-matchers/issues"
+  },
+  "engines": {
+    "node": ">=18.13.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "dependencies": {
+    "@surea11y/core": "^1.1.0",
+    "@surea11y/binding-base": "^1.1.0"
+  },
+  "peerDependencies": {
+    "jest": ">=27.0.0",
+    "vitest": ">=1.0.0"
+  },
+  "peerDependenciesMeta": {
+    "jest": {
+      "optional": true
+    },
+    "vitest": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0",
+    "vitest": "^4.1.10",
+    "jsdom": "^30.0.1"
+  },
+  "scripts": {
+    "test": "npm run test:jest && npm run test:vitest",
+    "test:jest": "jest",
+    "test:vitest": "vitest run"
+  }
+}
