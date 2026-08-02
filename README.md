@@ -178,21 +178,25 @@ test('only failures inside the scanned element are reported', () => {
 
 ### Document-wide rules
 
-**A handful of rules are deliberately whole-document, regardless of which element you scan** — `page-title-present`, `html-lang-attr-present`, and a few others check `document.title`/`document.documentElement`/document-wide navigation structure directly, because what they check (does *the page* have a title? a declared language? a way to skip repeated blocks?) is inherently a whole-document fact, not something that varies per-subtree.
+A handful of rules check a whole-page fact rather than anything in a specific subtree — `page-title-present`, `html-lang-attr-present`, and a few others check `document.title`/`document.documentElement`/document-wide navigation structure directly, because what they check (does *the page* have a title? a declared language? a way to skip repeated blocks?) doesn't make sense to ask of an arbitrary component snippet.
 
-A bare jsdom test document has no `<title>` and no `lang` attribute by default, so scanning even a single, perfectly accessible component will otherwise report these as failures on every single test — not a bug, just not what you're usually trying to test at the component level. Fix it once, not per test, in whichever setup file you already have from [Setup](#setup):
+Because of that, these rules behave differently depending on what you pass to `toHaveNoA11yViolations`:
+
+- **Any `Element`** (React Testing Library's `container`, `document.body`, etc.) is inherently a scoped subtree, so these rules report `notApplicable` rather than `fail` — a missing `<title>` never breaks a component-level test.
+- **`document` itself** is the whole page, so these rules are evaluated for real:
+
+```js
+test('a full-page scan still enforces document-wide rules', () => {
+  document.title = ''; // no <title> text
+  expect(document).toHaveNoA11yViolations({ rules: { include: 'page-title-present' } }); // fails
+});
+```
+
+If you do scan `document` directly in a test suite, set these up once in whichever setup file you already have from [Setup](#setup) rather than per test:
 
 ```js
 document.title = 'Test Page';
 document.documentElement.setAttribute('lang', 'en');
-```
-
-Or exclude the specific rules you don't want at the component level via `engineOptions`:
-
-```js
-expect(container).toHaveNoA11yViolations({
-  rules: { exclude: 'page-title-present,html-lang-attr-present,bypass-blocks-present' }
-});
 ```
 
 ## Failure messages
@@ -239,3 +243,5 @@ This package tests itself under both frameworks it supports:
 ## License
 
 MIT — see [`LICENSE`](./LICENSE).
+
+This package depends on [`@surea11y/core`](https://github.com/rumoroso/surea11y-core), which is MPL-2.0. MPL-2.0's copyleft is file-level and applies only to `@surea11y/core`'s own source files; consuming it as a normal package dependency doesn't affect this package's license.

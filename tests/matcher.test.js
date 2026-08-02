@@ -3,12 +3,6 @@
 const { toHaveNoA11yViolations } = require('../src/matcher');
 
 beforeEach(() => {
-  // A realistic ambient document -- a bare jsdom document (no <title>, no
-  // <html lang>) would otherwise fail page-title-present/html-lang-attr-present
-  // on every single test regardless of the container under test, since those
-  // rules deliberately check document.title/document.documentElement
-  // directly (a page's title/language is a whole-document fact, not a
-  // per-subtree one -- see README's "What it checks and doesn't" section).
   document.title = 'Test Page';
   document.documentElement.setAttribute('lang', 'en');
   document.body.innerHTML = '';
@@ -28,12 +22,21 @@ test('fails with a descriptive message when the element has a violation', () => 
   expect(message()).toMatch(/found 1/);
 });
 
-test('document-wide rules (e.g. page title/lang) still apply even when scanning a specific element, not just the whole document', () => {
-  document.title = ''; // no <title> text -- deliberately breaks page-title-present
+test('document-wide rules are notApplicable (not fail) when scanning a scoped element, since a subtree is not the whole page', () => {
+  document.title = ''; // would break page-title-present if it applied here
   document.body.innerHTML = '<div id="widget"><main><h1>Hi</h1></main></div>';
   const widget = document.getElementById('widget');
 
-  const { pass, message } = toHaveNoA11yViolations(widget, { rules: { include: 'page-title-present' } });
+  const { pass } = toHaveNoA11yViolations(widget, { rules: { include: 'page-title-present' } });
+
+  expect(pass).toBe(true);
+});
+
+test('document-wide rules still fail when scanning the whole document directly', () => {
+  document.title = ''; // no <title> text -- deliberately breaks page-title-present
+  document.body.innerHTML = '<main><h1>Hi</h1></main>';
+
+  const { pass, message } = toHaveNoA11yViolations(document, { rules: { include: 'page-title-present' } });
 
   expect(pass).toBe(false);
   expect(message()).toMatch(/page-title-present/);
