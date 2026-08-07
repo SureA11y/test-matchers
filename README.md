@@ -1,6 +1,6 @@
 # @surea11y/test-matchers
 
-An accessibility matcher for [`@surea11y/core`](https://github.com/rumoroso/surea11y-core), for jsdom-based component and unit tests — works with **Jest** and **Vitest** alike:
+An accessibility matcher for [`@surea11y/core`](https://github.com/SureA11y/core), for jsdom-based component and unit tests — works with **Jest** and **Vitest** alike:
 
 ```js
 expect(container).toHaveNoA11yViolations();
@@ -127,7 +127,7 @@ expect(result).toHaveNoA11yViolations();
 | Param | Type | Meaning |
 |---|---|---|
 | `received` | `Element`, `Document`, or `A11yScanResult` | What to check. A DOM `Element`/`Document` is scanned automatically; an object shaped like `{ checksResults: [...] }` is asserted on directly, with no scan performed. Anything else throws a `TypeError`. |
-| `engineOptions` | `object` (optional) | Passed straight through to `@surea11y/core`'s scan — the same options object used everywhere else in the surea11y ecosystem. See [Filtering and configuring scans](#filtering-and-configuring-scans-engineoptions) below and the engine's own [`ENGINE_OPTIONS.md`](https://github.com/rumoroso/surea11y-core/blob/main/docs/ENGINE_OPTIONS.md). Ignored when `received` is already a scan result. |
+| `engineOptions` | `object` (optional) | Passed straight through to `@surea11y/core`'s scan — the same options object used everywhere else in the surea11y ecosystem. See [Filtering and configuring scans](#filtering-and-configuring-scans-engineoptions) below and the engine's own [`ENGINE_OPTIONS.md`](https://github.com/SureA11y/core/blob/main/docs/ENGINE_OPTIONS.md). Ignored when `received` is already a scan result. |
 
 Returns the `{ pass, message }` shape both Jest's and Vitest's `expect.extend()` expect — you never call this directly in a test; it's wired up once via `expect.extend()` as shown in [Setup](#setup).
 
@@ -149,7 +149,7 @@ expect(container).toHaveNoA11yViolations({ excludeSelectors: ['.intercom-launche
 expect(container).toHaveNoA11yViolations({ rules: { include: 'img-alt-present, button-name-present' } });
 ```
 
-For the complete, current option surface (locale, contrast modes, shadow DOM, custom rules, WCAG-version tag combinations, etc.), see [`ENGINE_OPTIONS.md`](https://github.com/rumoroso/surea11y-core/blob/main/docs/ENGINE_OPTIONS.md) — this package doesn't duplicate or reinterpret that reference, it just forwards whatever you pass.
+For the complete, current option surface (locale, contrast modes, shadow DOM, custom rules, WCAG-version tag combinations, etc.), see [`ENGINE_OPTIONS.md`](https://github.com/SureA11y/core/blob/main/docs/ENGINE_OPTIONS.md) — this package doesn't duplicate or reinterpret that reference, it just forwards whatever you pass.
 
 ## What it checks and doesn't
 
@@ -162,7 +162,7 @@ test('cantTell rules do not fail a passing test', () => {
 });
 ```
 
-Being explicit about the boundaries of automation is part of surea11y's design — it will not, for example, confirm alt text is *meaningful* (only that it's present), judge color contrast aesthetically (only whether it meets the ratio), or detect a keyboard focus trap (that requires simulating real interaction over time). Those are exactly the cases reported as `cantTell` rather than guessed at. See the engine's [`LIMITATIONS.md`](https://github.com/rumoroso/surea11y-core/blob/main/docs/LIMITATIONS.md) for the full list.
+Being explicit about the boundaries of automation is part of surea11y's design — it will not, for example, confirm alt text is *meaningful* (only that it's present), judge color contrast aesthetically (only whether it meets the ratio), or detect a keyboard focus trap (that requires simulating real interaction over time). Those are exactly the cases reported as `cantTell` rather than guessed at. See the engine's [`LIMITATIONS.md`](https://github.com/SureA11y/core/blob/main/docs/LIMITATIONS.md) for the full list.
 
 ### Scoping
 
@@ -237,11 +237,11 @@ This package tests itself under both frameworks it supports:
 
 ## Related
 
-- [`@surea11y/core`](https://github.com/rumoroso/surea11y-core) — the underlying accessibility engine (rule catalog, CLI, output schema, engine options).
-- [`@surea11y/binding-base`](https://github.com/rumoroso/surea11y-core-binding-base) — shared, framework-agnostic helpers (like `formatFailures`) reused across surea11y's test-framework bindings.
+- [`@surea11y/core`](https://github.com/SureA11y/core) — the underlying accessibility engine (rule catalog, CLI, output schema, engine options).
+- [`@surea11y/binding-base`](https://github.com/SureA11y/binding-base) — shared, framework-agnostic helpers (like `formatFailures`) reused across surea11y's test-framework bindings.
 
 ## License
 
 MIT — see [`LICENSE`](./LICENSE).
 
-This package depends on [`@surea11y/core`](https://github.com/rumoroso/surea11y-core), which is MPL-2.0. MPL-2.0's copyleft is file-level and applies only to `@surea11y/core`'s own source files; consuming it as a normal package dependency doesn't affect this package's license.
+This package depends on [`@surea11y/core`](https://github.com/SureA11y/core), which is MPL-2.0. MPL-2.0's copyleft is file-level and applies only to `@surea11y/core`'s own source files; consuming it as a normal package dependency doesn't affect this package's license.
