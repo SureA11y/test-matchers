@@ -1,6 +1,6 @@
 {
   "name": "@surea11y/test-matchers",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Accessibility matcher for surea11y -- assert expect(container).toHaveNoA11yViolations() in jsdom-based component/unit tests, under Jest or Vitest.",
   "keywords": [
     "accessibility",
