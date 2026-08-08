@@ -237,7 +237,8 @@ This package tests itself under both frameworks it supports:
 
 ## Related
 
-- [`@surea11y/core`](https://github.com/SureA11y/core) — the underlying accessibility engine (rule catalog, CLI, output schema, engine options).
+- [`@surea11y/core`](https://github.com/SureA11y/core) — the underlying accessibility engine (rule catalog, output schema, engine options).
+- [`@surea11y/cli`](https://github.com/SureA11y/cli) — the `surea11y` command-line scanner, for checking built HTML outside a test runner.
 - [`@surea11y/binding-base`](https://github.com/SureA11y/binding-base) — shared, framework-agnostic helpers (like `formatFailures`) reused across surea11y's test-framework bindings.
 
 ## Maintainer
