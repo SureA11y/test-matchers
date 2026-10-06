@@ -69,3 +69,9 @@ test('throws a clear TypeError on invalid input', () => {
   expect(() => toHaveNoA11yViolations('not a node or result')).toThrow(TypeError);
   expect(() => toHaveNoA11yViolations('not a node or result')).toThrow(/expects a DOM element/);
 });
+
+test('a detached element fails the assertion, since nothing in it was scanned', () => {
+  const detached = document.createElement('div');
+  detached.innerHTML = '<img src="x.png">';
+  expect(() => expect(detached).toHaveNoA11yViolations()).toThrow(/not in the document the scan runs in/);
+});
