@@ -4,19 +4,19 @@ const { formatFailures, getScanGaps } = require('@surea11y/binding-base');
 const { scanElement } = require('./scan-element');
 
 // Scan gaps (binding-base's getScanGaps()) that fail the assertion: a scope
-// that matched nothing means nothing was checked, and a custom rule that did
-// not run cannot have passed. Either would otherwise read as a clean scan.
-// The CLI exits 2 on a scope that matches nothing. `context-partly-not-found`
-// (some of several selectors matched nothing) is only reported: the rest
-// was scanned.
-const FAILING_GAPS = ['context-not-found', 'custom-rule-skipped'];
+// that matched nothing means nothing was checked, and a custom rule or a
+// pack that did not run cannot have passed. Each would otherwise read as a
+// clean scan. The CLI exits 2 on a scope that matches nothing.
+// `context-partly-not-found` (some of several selectors matched nothing) is
+// only reported: the rest was scanned.
+const FAILING_GAPS = ['context-not-found', 'custom-rule-skipped', 'pack-skipped'];
 
 const DETACHED_NOTE =
   'The element given to toHaveNoA11yViolations() is not in the document the scan runs in ' +
   '(it is detached, or belongs to another document), so nothing in it was checked. ' +
   'Attach it to the document before asserting.';
 
-// Jest custom matcher: expect(received).toHaveNoA11yViolations(engineOptions?)
+// Jest custom matcher: expect(received).toHaveNoA11yViolations(engineOptions?, runOnly?)
 //
 // `received` is either:
 //   - a DOM Element/Document (the common case -- e.g. React Testing
@@ -26,17 +26,20 @@ const DETACHED_NOTE =
 //     asserted on directly, no scan performed -- lets a caller reuse one
 //     scan across multiple assertions.
 //
+// engineOptions and runOnly are core's third and fourth scan arguments,
+// passed as given.
+//
 // `fail` outcomes gate the assertion, and so do the scan gaps above.
 // `cantTell` is advisory everywhere else in surea11y (the CLI's exit code,
 // docs/TROUBLESHOOTING.md), and this matcher keeps that contract rather
 // than inventing a stricter one.
-function toHaveNoA11yViolations(received, engineOptions) {
+function toHaveNoA11yViolations(received, engineOptions, runOnly) {
   let result;
   let scannedElement = false;
   if (received && Array.isArray(received.checksResults)) {
     result = received;
   } else if (received && typeof received.nodeType === 'number') {
-    result = scanElement(received, engineOptions || {});
+    result = scanElement(received, engineOptions || {}, runOnly === undefined ? null : runOnly);
     scannedElement = received.nodeType !== 9; /* Node.DOCUMENT_NODE */
   } else {
     throw new TypeError('toHaveNoA11yViolations() expects a DOM element/document or a surea11y scan result.');

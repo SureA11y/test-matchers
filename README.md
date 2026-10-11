@@ -12,7 +12,7 @@ The matcher itself has no framework-specific code — `toHaveNoA11yViolations()`
 
 ## Why
 
-surea11y is built around a conservative philosophy: **never report a violation unless it can be proven**. Each rule makes one deterministic decision — `fail` when a violation is objectively certain, `cantTell` when it requires human judgement (e.g. whether alt text is *meaningful*, not just present). This matcher keeps that same contract: `fail` outcomes gate the assertion, and `cantTell` findings are surfaced for visibility but never break a passing test. A scan that could not check what it was asked to (an element not in the document, a custom rule that did not run) fails too, rather than passing on nothing. See ["What it checks and doesn't"](#what-it-checks-and-doesnt) below.
+surea11y is built around a conservative philosophy: **never report a violation unless it can be proven**. Each rule makes one deterministic decision — `fail` when a violation is objectively certain, `cantTell` when it requires human judgement (e.g. whether alt text is *meaningful*, not just present). This matcher keeps that same contract: `fail` outcomes gate the assertion, and `cantTell` findings are surfaced for visibility but never break a passing test. A scan that could not check what it was asked to (an element not in the document, a custom rule or a pack that did not run) fails too, rather than passing on nothing. See ["What it checks and doesn't"](#what-it-checks-and-doesnt) below.
 
 ## Requirements
 
@@ -76,7 +76,7 @@ export default {
 
 The bundled `.d.ts` augments **both** Jest's global `jest.Matchers` interface and Vitest's `@vitest/expect` `Assertion`/`AsymmetricMatchersContaining` interfaces, with no `@types/jest` or `vitest` import required to ship it — whichever framework (or neither) is actually installed, only the matching augmentation takes effect; the other is simply inert. Nothing further to configure beyond making sure the setup file above is included in your `tsconfig`.
 
-`engineOptions` is typed with `@surea11y/core`'s own `EngineOptions`, and a precomputed result may be core's `ScanResult`; both are re-exported from this package (`import type { EngineOptions, ScanResult } from '@surea11y/test-matchers'`).
+`engineOptions` is typed with `@surea11y/core`'s own `EngineOptions` (or `StrictEngineOptions`, with `strictOptions: true`), `runOnly` with core's `RunOnly` and its other accepted forms (`A11yRunOnly`), and a precomputed result may be core's `ScanResult`; all are re-exported from this package (`import type { EngineOptions, RunOnly, ScanResult } from '@surea11y/test-matchers'`). `engineOptions.packs` takes the packs `definePack` from `@surea11y/core/pack` returns. A precomputed result's `skippedPacks` is typed on `A11yScanResult` beside `skippedCustomRules`.
 
 ## Usage
 
@@ -126,18 +126,28 @@ If `#main` matches nothing, `@surea11y/core` (1.10.0 and later) scans nothing an
 
 ## API
 
-### `toHaveNoA11yViolations(received, engineOptions?)`
+### `toHaveNoA11yViolations(received, engineOptions?, runOnly?)`
 
 | Param | Type | Meaning |
 |---|---|---|
 | `received` | `Element`, `Document`, `ScanResult` or `A11yScanResult` | What to check. A DOM `Element`/`Document` is scanned automatically; an object shaped like `{ checksResults: [...] }` (such as `@surea11y/core`'s `ScanResult`) is asserted on directly, with no scan performed. Anything else throws a `TypeError`. |
 | `engineOptions` | `object` (optional) | Passed straight through to `@surea11y/core`'s scan — the same options object used everywhere else in the surea11y ecosystem. See [Filtering and configuring scans](#filtering-and-configuring-scans-engineoptions) below and the engine's own [`ENGINE_OPTIONS.md`](https://github.com/SureA11y/core/blob/main/docs/ENGINE_OPTIONS.md). Ignored when `received` is already a scan result. |
+| `runOnly` | `object`, `string` or `string[]` (optional) | Passed straight through as the scan's `runOnly`, `runDomRulesInPage`'s fourth argument: a WCAG target (`{ wcag: { version: '2.2', level: 'AA' } }`), `bestPractices`, rule ids or tags. See [Choosing a WCAG target](#choosing-a-wcag-target-runonly). Ignored when `received` is already a scan result. |
 
 Returns the `{ pass, message }` shape both Jest's and Vitest's `expect.extend()` expect — you never call this directly in a test; it's wired up once via `expect.extend()` as shown in [Setup](#setup).
 
 `pass` is `false` when any rule reports `fail`, or when the scan left out what it was asked to check ([below](#scans-that-left-something-out)).
 
-The scan itself can throw, and the test then fails with the engine's error. Since `@surea11y/core` 1.10.0, an `engineOptions` rule or tag list in which no value names a rule or a tag (`rules.include`, `tags.include`, a typo such as `{ tags: { include: 'wcag2.2aa' } }`) throws an `Error` with `code: 'INVALID_RUN_ONLY'`, where it used to run no rule and pass. An unknown value beside known ones is ignored with a `console.warn`.
+The scan itself can throw, and the test then fails with the engine's error, which carries a `code`:
+
+- `INVALID_RUN_ONLY` (`@surea11y/core` 1.10.0 and later): an `engineOptions` rule or tag list, or a `runOnly`, in which no value names a rule or a tag (`rules.include`, `tags.include`, a typo such as `{ tags: { include: 'wcag2.2aa' } }`), or a `runOnly.wcag` target that isn't one (`{ version: '3.0', level: 'AA' }`). It would otherwise run no rule and pass. An unknown value beside known ones is ignored with a `console.warn`.
+- `INVALID_ENGINE_OPTIONS` (1.11 and later): with `strictOptions: true`, an option the engine doesn't read or a value it can't use. The message names each, with the closest known option (`unknown option "lcoale" (did you mean "locale"?)`). Without `strictOptions`, a likely typo is only warned about.
+- `PAGE_BUILTINS_BROKEN` (1.11 and later): the test's or the page's own code broke a JavaScript built-in the engine relies on (`Array.prototype.filter`, `Map`, `JSON.stringify`, ...), so no result it gave could be trusted. The message names each one.
+
+```js
+// Catch a misspelt option instead of scanning without it
+expect(container).toHaveNoA11yViolations({ strictOptions: true, locale: 'fr' });
+```
 
 ## Filtering and configuring scans (`engineOptions`)
 
@@ -157,9 +167,50 @@ expect(container).toHaveNoA11yViolations({ excludeSelectors: ['.intercom-launche
 expect(container).toHaveNoA11yViolations({ rules: { include: 'img-alt-present, button-name-present' } });
 ```
 
-Rule ids change between core releases only by addition or deprecation, never by removal within 1.x. In 1.10.0, `landmark-role-name-present` is new (an element given `role="region"` or `role="form"` without an accessible name, reported as `cantTell`), and `label-title-only` is deprecated: it now always reports `notApplicable`, since `form-control-programmatic-label-quality` reports the same fields. Its id still resolves, so `rules: { include: 'label-title-only' }` doesn't throw, but it no longer finds anything; include `form-control-programmatic-label-quality` instead.
+Rule ids change between core releases only by addition or deprecation, never by removal within 1.x. `label-title-only`, deprecated in 1.10.0, always reports `notApplicable`; its id still resolves, so `rules: { include: 'label-title-only' }` doesn't throw, but include `form-control-programmatic-label-quality` instead.
+
+### Choosing a WCAG target (`runOnly`)
+
+The third argument is the scan's `runOnly`, passed to the engine as it is. `runOnly.wcag` selects by conformance target: `{ wcag: { version: '2.2', level: 'AA' } }` runs the rules for WCAG 2.2's Level A and AA criteria, by the level each criterion has in that version (4.1.1 Parsing, which 2.2 removed, is part of a `'2.1'` target and not of a `'2.2'` one). `bestPractices: true` adds the rules that name no WCAG criterion, such as `region` and `heading-order`; on its own it runs only those, and beside `engineOptions.profile` it adds them to the profile's rules. Both need `@surea11y/core` 1.11 or later.
+
+```js
+// WCAG 2.2 A and AA
+expect(container).toHaveNoA11yViolations({}, { wcag: { version: '2.2', level: 'AA' } });
+
+// The same, and the best practices
+expect(container).toHaveNoA11yViolations({}, { wcag: { version: '2.2', level: 'AA' }, bestPractices: true });
+
+// A pack's checklist profile, and the best practices
+expect(container).toHaveNoA11yViolations({ packs: [acmePolicy], profile: 'acme-web-2026' }, { bestPractices: true });
+```
+
+`runOnly` also takes rule ids and tags (`includeRuleIds`, `tags`, `excludeRuleIds`, ...), which add to a target's rules; the excludes apply after. A `runOnly` that selects anything replaces the selection in `engineOptions.rules`/`.tags` outright, so `{ rules: { include: 'img-alt-present' } }` beside a WCAG target runs the whole target: give a selection one way or the other, not both. Pass `{}` or `null` as `engineOptions` when you only need `runOnly`.
 
 For the complete, current option surface (locale, contrast modes, shadow DOM, custom rules, WCAG-version tag combinations, etc.), see [`ENGINE_OPTIONS.md`](https://github.com/SureA11y/core/blob/main/docs/ENGINE_OPTIONS.md) — this package doesn't duplicate or reinterpret that reference, it just forwards whatever you pass.
+
+## Scanning with packs: standards, checklists and your own rules
+
+A pack brings rules, variants of core's rules, a standard or a checklist, and their profiles and messages, from a package of its own: a national standard such as RGAA, or your organisation's accessibility policy. `@surea11y/core` runs a pack as it runs its own rules and standards, so its findings, rollups and failure messages look like core's. Packs need `@surea11y/core` 1.11.1 or later.
+
+The matcher scans in Node, so a pack is passed as the object itself, in `engineOptions.packs`, and its profile is chosen with `engineOptions.profile`:
+
+```js
+const acmePolicy = require('@acme/a11y-policy'); // a pack
+
+test('the page meets the Acme web policy', () => {
+  document.body.innerHTML = '<main><h1>Welcome</h1><video autoplay src="intro.mp4"></video></main>';
+  expect(document).toHaveNoA11yViolations({ packs: [acmePolicy], profile: 'acme-web-2026' });
+  // fails: acme-no-autoplay (serious): This video plays with sound as the page opens.
+});
+```
+
+A pack's own rules appear in the result like core's, with ids that start with its namespace (`acme-no-autoplay`). Without its profile, a pack's rules run only when selected, by id (`rules: { include: 'acme-no-autoplay' }`) or by a tag. List several packs in the array to scan with them all. Keep the pack objects in one place (a setup file or a module): core prepares an engine for each set of pack objects and keeps it for the next scan with the same ones.
+
+**Writing a pack.** A pack is an object made with `definePack` from `@surea11y/core/pack`. [`examples/acme-policy-pack.js`](./examples/acme-policy-pack.js) is a small one: a house rule, a checklist profile (WCAG 2.2 A and AA, `region`, and the house rule) and two checklist items. [`examples/pack.test.js`](./examples/pack.test.js) (Jest) and [`examples/pack.vitest.test.js`](./examples/pack.vitest.test.js) (Vitest) use it as a test gate. For a pack of your own, `npx surea11y-pack new <folder>` (from `@surea11y/core`) writes a package that works as generated, with its tests, docs and lint; core's [`PACKS.md`](https://github.com/SureA11y/core/blob/main/docs/PACKS.md) is the guide.
+
+The example's house rule reads the `muted` property, as a browser sets it from the `muted` attribute. jsdom doesn't, so in a jsdom test a `<video autoplay muted>` written as markup still reads as unmuted; a component that sets the property (React's `muted` prop does) reads as muted.
+
+**When a pack doesn't run.** A pack core can't run (its `core` range leaves out the installed core, it isn't valid, or its namespace clashes with another pack's) is left out of the scan and listed in the result's `skippedPacks` with the reason. The matcher fails on it ([below](#scans-that-left-something-out)) rather than passing with the pack's rules never run. Install the pack beside this package, so npm resolves one `@surea11y/core` for both.
 
 ## What it checks and doesn't
 
@@ -180,6 +231,9 @@ A scan can come back with nothing failed because it checked nothing. Since `@sur
 
 - **The element is not in the document the scan runs in** — detached (created with `document.createElement()` and never appended), or from another document. The scan runs on the global `document`, so it finds nothing to scan. Before core 1.10.0 it fell back to scanning the whole page instead. Attach the element before asserting. The same applies to a precomputed result whose `contextMatch.elementCount` is 0.
 - **A custom rule did not run** (`engineOptions.customRules`: no id, a `runInPage` that isn't a function, an invalid `meta`, a duplicate id). The result lists it in `skippedCustomRules`, and the message names it with the reason.
+- **A pack did not run** (`engineOptions.packs`, `@surea11y/core` 1.11 and later): its `core` range leaves out the installed core, it isn't valid, or its namespace clashes with another pack's. The result lists it in `skippedPacks`, and the message names it with the reason, so the assertion can't pass with the pack's rules never run.
+
+These are the gap kinds binding-base's `getScanGaps()` reports as `'context-not-found'`, `'custom-rule-skipped'` and `'pack-skipped'`; the fourth, `'context-partly-not-found'`, is only reported.
 
 A precomputed result whose scope was only partly found (several selectors, some matching nothing) is not failed for it: the rest was scanned. The message names the missing selectors whenever it is shown.
 
@@ -220,24 +274,26 @@ document.documentElement.setAttribute('lang', 'en');
 
 ## Failure messages
 
-When the assertion fails, the message lists every occurrence (not just every rule — one rule can flag several elements), with the rule ID, severity, a human-readable summary, the failing element's selector, and a fix hint where available. It ends with the `@surea11y/core` release that produced the result, to quote in a bug report:
+When the assertion fails, the message lists every occurrence (not just every rule — one rule can flag several elements), with the rule ID, severity, a human-readable summary, the failing element's selector, and a fix hint where available. It names the `@surea11y/core` release that produced the result, to quote in a bug report:
 
 ```
 expected no accessibility violations, but found 1:
 
-1) img-alt-present (serious): Missing alt attribute on <img>.
+1) img-alt-present (serious): This <img> has no alt attribute.
    at body > img
-   Add an alt attribute (use alt="" only for decorative images).
+   Add an alt attribute that says what the image shows, or alt="" if the image is purely decorative.
 
-Scanned with @surea11y/core 1.10.0.
+Scanned with @surea11y/core 1.11.1.
+
+1 rule(s) need manual review (cantTell, not counted as failures): manual-review
 ```
 
 An element inside a shadow root (with `engineOptions.includeShadowDom`) is located through its shadow hosts, outermost first: `at #host >>> img`.
 
-If any `cantTell` results exist alongside the failures, they're appended as a separate note so they stay visible without affecting `pass`/`fail`:
+The last line is the `cantTell` note: any `cantTell` results alongside the failures are appended as a separate note so they stay visible without affecting `pass`/`fail`. With a vague link beside the image (`<a href="/pricing">Click here</a>`), it reads:
 
 ```
-2 rule(s) need manual review (cantTell, not counted as failures): link-name-quality, contrast-computable
+3 rule(s) need manual review (cantTell, not counted as failures): contrast-computable, link-name-quality, manual-review
 ```
 
 A scan that left something out says what, in place of findings:
@@ -249,12 +305,39 @@ The element given to toHaveNoA11yViolations() is not in the document the scan ru
 
 Nothing was scanned: the scan scope matched no element ("[data-surea11y-jest-scope=\"…\"]").
 
-Scanned with @surea11y/core 1.10.0.
+Scanned with @surea11y/core 1.11.1.
 ```
+
+A pack that did not run is named with the reason; the findings line above it covers the rules that did run:
+
+```
+expected no accessibility violations, but the scan left out what it was asked to check:
+
+No accessibility violations found.
+
+Pack "@acme/a11y-policy" did not run: it supports core ^2.0.0, and this is core 1.11.1.
+
+Scanned with @surea11y/core 1.11.1.
+
+2 rule(s) need manual review (cantTell, not counted as failures): contrast-computable, manual-review
+```
+
+## What changes with `@surea11y/core` 1.11
+
+The matcher passes `engineOptions` and `runOnly` through to the engine, so these show in results without a change here (see core's [`CHANGELOG.md`](https://github.com/SureA11y/core/blob/main/CHANGELOG.md) for the full list):
+
+- **Messages are reworded** in all five languages to say plainly what is wrong and what to do (`This <img> has no alt attribute.`). Message keys, rule ids and reason codes are unchanged; a test that matches message text needs the new wording.
+- **Packs** run in a scan, from `engineOptions.packs` ([above](#scanning-with-packs-standards-checklists-and-your-own-rules)), and a pack that did not run fails the assertion.
+- **WCAG targets and best practices** can be chosen with `runOnly.wcag` and `runOnly.bestPractices`, the matcher's third argument ([above](#choosing-a-wcag-target-runonly)).
+- **`aria-hidden-focus` maps to 4.1.2 only**, no longer to 2.4.7 Focus Visible, so `{ tags: { include: 'wcag2aa' } }` alone no longer selects it.
+- **A custom rule counts toward its WCAG criterion.** A `customRules` rule with `meta.wcagSc` (or a WCAG `normativeMappings` entry) fails that criterion's rollup when it fails, and custom and pack rules run after core's, with read-only helpers.
+- **On/off options read as meant**: `{ includeShadowDom: 'false' }` is off, where it was on. `strictOptions: true` rejects any option the engine doesn't read, and a rule selection whose includes and excludes cancel out, which runs no rule, is warned about (see [the API](#tohavenoa11yviolationsreceived-engineoptions-runonly)).
+- **Under jsdom**, a font size given as a keyword (`xx-large`) or a `calc()` is read as a browser reads it, where the contrast rules read it as 0px; contrast still runs in `visibilityMode: 'styleOnly'`, since jsdom has no layout.
+
 
 ## Examples
 
-Runnable, side-by-side examples for both frameworks live in [`examples/`](./examples): [`basic.test.js`](./examples/basic.test.js) (Jest) and [`basic.vitest.test.js`](./examples/basic.vitest.test.js) (Vitest) — same two assertions, same matcher, only the registration syntax differs. To try them locally:
+Runnable, side-by-side examples for both frameworks live in [`examples/`](./examples): [`basic.test.js`](./examples/basic.test.js) (Jest) and [`basic.vitest.test.js`](./examples/basic.vitest.test.js) (Vitest) — same two assertions, same matcher, only the registration syntax differs — and [`pack.test.js`](./examples/pack.test.js) and [`pack.vitest.test.js`](./examples/pack.vitest.test.js), the same with the [`acme-policy-pack.js`](./examples/acme-policy-pack.js) pack and its profile. To try them locally:
 
 ```sh
 npm install
@@ -267,9 +350,9 @@ npm run test:vitest  # Vitest only
 
 This package tests itself under both frameworks it supports:
 
-- [`tests/matcher.test.js`](./tests/matcher.test.js) and [`tests/scan-element.test.js`](./tests/scan-element.test.js) — the exhaustive logic suite (rule scoping, document-wide rules, `cantTell` handling, scans that left something out, shadow-DOM locations, `engineOptions` passthrough and `INVALID_RUN_ONLY`, thrown-input validation, mocked-throw cleanup), run under Jest since this is where the underlying logic lives; it doesn't depend on which framework eventually calls it.
+- [`tests/matcher.test.js`](./tests/matcher.test.js) and [`tests/scan-element.test.js`](./tests/scan-element.test.js) — the exhaustive logic suite (rule scoping, document-wide rules, `cantTell` handling, scans that left something out, packs that run and packs that don't, shadow-DOM locations, `engineOptions` and `runOnly` passthrough, WCAG targets and best practices, `INVALID_RUN_ONLY` and `INVALID_ENGINE_OPTIONS`, thrown-input validation, mocked-throw cleanup), run under Jest since this is where the underlying logic lives; it doesn't depend on which framework eventually calls it.
 - [`tests/types.test.js`](./tests/types.test.js) — compiles [`tests/types/usage.ts`](./tests/types/usage.ts) with `tsc --strict` against `@surea11y/core`'s own types, so the bundled `.d.ts` can't drift from the engine's.
-- [`tests/matcher.vitest.test.js`](./tests/matcher.vitest.test.js) — proves the same matcher, completely unmodified, integrates correctly with Vitest's own `expect.extend` (registration, `.not`, `engineOptions` passthrough, precomputed-result assertions, thrown `TypeError`), so this isn't just a documentation claim.
+- [`tests/matcher.vitest.test.js`](./tests/matcher.vitest.test.js) — proves the same matcher, completely unmodified, integrates correctly with Vitest's own `expect.extend` (registration, `.not`, `engineOptions` and `runOnly` passthrough, packs, precomputed-result assertions, thrown `TypeError`), so this isn't just a documentation claim.
 
 ## Related
 

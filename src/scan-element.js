@@ -12,12 +12,12 @@ const SCOPE_ATTR = 'data-surea11y-jest-scope';
 // React Testing Library's `container`) is tagged with a temporary, uniquely
 // generated attribute, scanned by that attribute selector, then untagged --
 // regardless of whether the scan throws.
-function scanElement(node, engineOptions = {}) {
+function scanElement(node, engineOptions = {}, runOnly = null) {
   const { runDomRulesInPage } = require('@surea11y/core');
 
   if (node.nodeType === 9 /* Node.DOCUMENT_NODE */) {
     const href = node.location ? node.location.href : null;
-    return runDomRulesInPage(href, null, engineOptions, null);
+    return runDomRulesInPage(href, null, engineOptions, runOnly);
   }
 
   const id = randomUUID();
@@ -25,7 +25,7 @@ function scanElement(node, engineOptions = {}) {
   try {
     const doc = node.ownerDocument;
     const href = doc && doc.location ? doc.location.href : null;
-    return runDomRulesInPage(href, `[${SCOPE_ATTR}="${id}"]`, engineOptions, null);
+    return runDomRulesInPage(href, `[${SCOPE_ATTR}="${id}"]`, engineOptions, runOnly);
   } finally {
     node.removeAttribute(SCOPE_ATTR);
   }

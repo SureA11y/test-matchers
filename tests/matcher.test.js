@@ -161,3 +161,89 @@ test('an engineOptions rule or tag list that names nothing throws INVALID_RUN_ON
   expect(caught.code).toBe('INVALID_RUN_ONLY');
   expect(caught.message).toMatch(/img-alt-presnt/);
 });
+
+describe('packs', () => {
+  const { definePack } = require('@surea11y/core/pack');
+  const acmePolicy = require('../examples/acme-policy-pack');
+
+  beforeEach(() => {
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    console.warn.mockRestore();
+  });
+
+  test('fails when a pack did not run, naming the pack and the reason', () => {
+    document.body.innerHTML = '<main><h1>Hi</h1><video autoplay src="intro.mp4"></video></main>';
+    const futurePack = definePack({ ...acmePolicy, core: '^2.0.0' });
+
+    const { pass, message } = toHaveNoA11yViolations(document, { packs: [futurePack] });
+
+    expect(pass).toBe(false);
+    expect(message()).toMatch(/left out what it was asked to check/);
+    expect(message()).toMatch(/Pack "@acme\/a11y-policy" did not run: it supports core \^2\.0\.0/);
+  });
+
+  test("a pack that runs fails the assertion on the pack's finding", () => {
+    document.body.innerHTML = '<main><h1>Hi</h1><video autoplay src="intro.mp4"></video></main>';
+
+    const { pass, message } = toHaveNoA11yViolations(document, { packs: [acmePolicy], profile: 'acme-web-2026' });
+
+    expect(pass).toBe(false);
+    expect(message()).toMatch(/found 1:/);
+    expect(message()).toMatch(/acme-no-autoplay \(serious\): This video plays with sound as the page opens\./);
+  });
+
+  test("a pack's profile passes a page that meets it", () => {
+    document.body.innerHTML = '<main><h1>Hi</h1><video autoplay src="intro.mp4"></video></main>';
+    document.querySelector('video').muted = true;
+    expect(toHaveNoA11yViolations(document, { packs: [acmePolicy], profile: 'acme-web-2026' }).pass).toBe(true);
+  });
+});
+
+describe('runOnly', () => {
+  const duplicateIds = '<main><h1>Hi</h1><div id="a"></div><div id="a"></div></main>';
+
+  test('a WCAG 2.1 target runs 4.1.1 Parsing, which a 2.2 target leaves out', () => {
+    document.body.innerHTML = duplicateIds;
+
+    const wcag21 = toHaveNoA11yViolations(document, {}, { wcag: { version: '2.1', level: 'A' } });
+    const wcag22 = toHaveNoA11yViolations(document, {}, { wcag: { version: '2.2', level: 'AA' } });
+
+    expect(wcag21.pass).toBe(false);
+    expect(wcag21.message()).toMatch(/duplicate-id/);
+    expect(wcag22.pass).toBe(true);
+  });
+
+  test('bestPractices adds the best-practice rules to a WCAG target', () => {
+    document.body.innerHTML = '<main><img src="x.png"></main><p>Outside any landmark</p>';
+
+    const target = toHaveNoA11yViolations(document, {}, { wcag: { version: '2.2', level: 'AA' } });
+    const withBestPractices = toHaveNoA11yViolations(document, {}, { wcag: { version: '2.2', level: 'AA' }, bestPractices: true });
+
+    expect(target.message()).not.toMatch(/\bregion\b/);
+    expect(withBestPractices.message()).toMatch(/manual review.*\bregion\b/);
+  });
+
+  test('a WCAG target the engine does not know throws INVALID_RUN_ONLY', () => {
+    document.body.innerHTML = '<main><h1>Hi</h1></main>';
+    expect(() => toHaveNoA11yViolations(document.body, {}, { wcag: { version: '3.0', level: 'AA' } })).toThrow(
+      expect.objectContaining({ code: 'INVALID_RUN_ONLY' })
+    );
+  });
+
+  test('registered via expect.extend, takes runOnly as the second argument', () => {
+    expect.extend({ toHaveNoA11yViolations });
+    document.body.innerHTML = duplicateIds;
+    expect(document).not.toHaveNoA11yViolations({}, { wcag: { version: '2.1', level: 'A' } });
+    expect(document).toHaveNoA11yViolations({}, { wcag: { version: '2.2', level: 'AA' } });
+  });
+});
+
+test('strictOptions throws INVALID_ENGINE_OPTIONS on an option the engine does not read', () => {
+  document.body.innerHTML = '<main><h1>Hi</h1></main>';
+  expect(() => toHaveNoA11yViolations(document.body, { strictOptions: true, lcoale: 'fr' })).toThrow(
+    expect.objectContaining({ code: 'INVALID_ENGINE_OPTIONS', message: expect.stringMatching(/did you mean "locale"/) })
+  );
+});

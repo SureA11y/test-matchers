@@ -18,16 +18,19 @@
 // test runner calling toHaveNoA11yViolations() directly -- never sees an
 // error from the other framework's block.
 
-import type { EngineOptions, ScanResult } from '@surea11y/core';
+import type { EngineOptions, LegacyTagRunOnly, RunOnly, ScanResult, StrictEngineOptions, StringList } from '@surea11y/core';
 
-export type { EngineOptions, ScanResult };
+export type { EngineOptions, RunOnly, ScanResult, StrictEngineOptions };
+
+/** core's 4th scan argument: a WCAG target, best practices, rule ids or tags. */
+export type A11yRunOnly = RunOnly | LegacyTagRunOnly | StringList;
 
 /**
  * What toHaveNoA11yViolations() reads from a precomputed result. Any
  * @surea11y/core ScanResult fits; so does a hand-built object with just
  * `checksResults`. A result whose `contextMatch.elementCount` is 0, or that
- * lists `skippedCustomRules`, fails the assertion (@surea11y/core 1.10.0
- * and later).
+ * lists `skippedCustomRules` (@surea11y/core 1.10.0 and later) or
+ * `skippedPacks` (1.11 and later), fails the assertion.
  */
 export interface A11yScanResult {
   checksResults: ReadonlyArray<{ ruleId: string; outcome: string; severity?: string; occurrences: readonly unknown[] }>;
@@ -35,6 +38,8 @@ export interface A11yScanResult {
   contextMatch?: { elementCount: number; unmatchedSelectors: string[] } | null;
   /** Custom rules that did not run, and why. */
   skippedCustomRules?: Array<{ id: string | null; reason: string }>;
+  /** Packs that did not run, and why. */
+  skippedPacks?: Array<{ name: string | null; reason: string }>;
   /** `version` is the @surea11y/core release that produced the result. */
   engine?: { version?: string; [key: string]: unknown };
   [key: string]: unknown;
@@ -42,11 +47,12 @@ export interface A11yScanResult {
 
 export function toHaveNoA11yViolations(
   received: Node | ScanResult | A11yScanResult,
-  engineOptions?: EngineOptions
+  engineOptions?: EngineOptions | StrictEngineOptions | null,
+  runOnly?: A11yRunOnly | null
 ): { pass: boolean; message: () => string };
 
 interface A11yCustomMatchers<R = unknown> {
-  toHaveNoA11yViolations(engineOptions?: EngineOptions): R;
+  toHaveNoA11yViolations(engineOptions?: EngineOptions | StrictEngineOptions | null, runOnly?: A11yRunOnly | null): R;
 }
 
 declare global {

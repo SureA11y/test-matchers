@@ -8,7 +8,8 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 
 test("index.d.ts compiles against @surea11y/core's types", () => {
-  const tsc = require.resolve('typescript/bin/tsc');
+  // TypeScript 7 exports no bin/tsc subpath, so find it beside its package.json.
+  const tsc = path.join(path.dirname(require.resolve('typescript/package.json')), 'bin', 'tsc');
   const file = path.join(__dirname, 'types', 'usage.ts');
   let output = '';
   try {
