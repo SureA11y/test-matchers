@@ -208,8 +208,6 @@ A pack's own rules appear in the result like core's, with ids that start with it
 
 **Writing a pack.** A pack is an object made with `definePack` from `@surea11y/core/pack`. [`examples/acme-policy-pack.js`](./examples/acme-policy-pack.js) is a small one: a house rule, a checklist profile (WCAG 2.2 A and AA, `region`, and the house rule) and two checklist items. [`examples/pack.test.js`](./examples/pack.test.js) (Jest) and [`examples/pack.vitest.test.js`](./examples/pack.vitest.test.js) (Vitest) use it as a test gate. For a pack of your own, `npx surea11y-pack new <folder>` (from `@surea11y/core`) writes a package that works as generated, with its tests, docs and lint; core's [`PACKS.md`](https://github.com/SureA11y/core/blob/main/docs/PACKS.md) is the guide.
 
-The example's house rule reads the `muted` property, as a browser sets it from the `muted` attribute. jsdom doesn't, so in a jsdom test a `<video autoplay muted>` written as markup still reads as unmuted; a component that sets the property (React's `muted` prop does) reads as muted.
-
 **When a pack doesn't run.** A pack core can't run (its `core` range leaves out the installed core, it isn't valid, or its namespace clashes with another pack's) is left out of the scan and listed in the result's `skippedPacks` with the reason. The matcher fails on it ([below](#scans-that-left-something-out)) rather than passing with the pack's rules never run. Install the pack beside this package, so npm resolves one `@surea11y/core` for both.
 
 ## What it checks and doesn't
