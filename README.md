@@ -311,7 +311,7 @@ A pack that did not run is named with the reason; the findings line above it cov
 ```
 expected no accessibility violations, but the scan left out what it was asked to check:
 
-No accessibility violations found.
+No accessibility violations found in what was scanned.
 
 Pack "@acme/a11y-policy" did not run: it supports core ^2.0.0, and this is core 1.11.1.
 
