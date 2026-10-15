@@ -1,12 +1,64 @@
 # @surea11y/test-matchers
 
-An accessibility matcher for [`@surea11y/core`](https://github.com/SureA11y/core), for jsdom-based component and unit tests — works with **Jest** and **Vitest** alike:
+**Fail a Jest or Vitest test when a component has accessibility violations.** Render your React, Vue, Angular or Svelte component (or any DOM) in a jsdom test, then:
 
 ```js
 expect(container).toHaveNoA11yViolations();
 ```
 
+The checks come from [`@surea11y/core`](https://github.com/SureA11y/core), surea11y's accessibility engine. This package is the small layer that turns a core scan into a test assertion: it scans the element you give it, fails the test on proven violations, and prints a failure message that says what is wrong, where, and how to fix it.
+
 surea11y's engine is synchronous, so this matcher is too. No `await`, no forgetting it and silently passing on a resolved Promise.
+
+## Quick start
+
+```sh
+npm install --save-dev @surea11y/test-matchers
+```
+
+```js
+// Jest: jest.setup.js (with testEnvironment: 'jsdom')
+expect.extend({ toHaveNoA11yViolations: require('@surea11y/test-matchers').toHaveNoA11yViolations });
+```
+
+```js
+// Vitest: vitest.setup.js (with test.environment: 'jsdom')
+import { expect } from 'vitest';
+import { toHaveNoA11yViolations } from '@surea11y/test-matchers';
+expect.extend({ toHaveNoA11yViolations });
+```
+
+```js
+import { render } from '@testing-library/react';
+
+test('MyComponent has no accessibility violations', () => {
+  const { container } = render(<MyComponent />);
+  expect(container).toHaveNoA11yViolations();
+});
+```
+
+`@surea11y/core` is installed with it; there is nothing else to add. Full [Setup](#setup), including the config files and TypeScript, is below.
+
+## Do you need this package?
+
+surea11y comes as a few packages. Pick by where you want the check to run:
+
+| You want to… | Install |
+|---|---|
+| Fail a **Jest or Vitest** test (component or unit test, jsdom) on accessibility violations | **`@surea11y/test-matchers`** (this package) |
+| Check built HTML or a page from the **terminal or CI**, outside a test runner | [`@surea11y/cli`](https://github.com/SureA11y/cli) |
+| Call the **engine** yourself and work with the raw scan result | [`@surea11y/core`](https://github.com/SureA11y/core) |
+
+If you write component tests with Jest or Vitest, this is the one to start with: it brings core with it. You don't need it to use the CLI, or to call core directly.
+
+### If you've used another accessibility matcher
+
+Registration is the usual one: `expect.extend()` once in a setup file, then assert on a rendered container. What may differ from what you know:
+
+- **No `await` and no separate scan call.** Pass the container itself; the matcher scans it, synchronously.
+- **Only proven violations fail the test.** Findings that need a person to judge (is this alt text *meaningful*?) are reported as `cantTell` and listed in the message, but never fail a test on their own. See [Why](#why).
+- **A scan that checked nothing fails.** A detached element, or a custom rule or pack that did not run, fails the assertion instead of passing on nothing. See [Scans that left something out](#scans-that-left-something-out).
+- **Rule ids, tags and options are surea11y's.** See [Filtering and configuring scans](#filtering-and-configuring-scans-engineoptions).
 
 The matcher itself has no framework-specific code — `toHaveNoA11yViolations()` is a plain function returning Jest's/Vitest's shared `{ pass, message }` matcher shape, so it plugs into either framework's `expect.extend()` unmodified. Everything below applies identically to both; where setup differs (registration, TypeScript types), both are shown side by side.
 
