@@ -240,6 +240,17 @@ expect(container).toHaveNoA11yViolations({ packs: [acmePolicy], profile: 'acme-w
 
 For the complete, current option surface (locale, contrast modes, shadow DOM, custom rules, WCAG-version tag combinations, etc.), see [`ENGINE_OPTIONS.md`](https://github.com/SureA11y/core/blob/main/docs/ENGINE_OPTIONS.md) — this package doesn't duplicate or reinterpret that reference, it just forwards whatever you pass.
 
+### Checking against EN 301 549
+
+EN 301 549, the standard the European Accessibility Act refers to, restates WCAG's Level A and AA criteria in its chapter 9. `engineOptions.profile` runs the rules for its version, and each finding in the scan result carries its EN 301 549 clause beside its WCAG criterion, in `meta.normativeMappings` (WCAG 1.1.1 is clause 9.1.1.1):
+
+```js
+// EN 301 549 V4.1.1 (WCAG 2.2 A and AA); 'en301549-v3.2.1' for V3.2.1 (WCAG 2.1 A and AA)
+expect(container).toHaveNoA11yViolations({ profile: 'en301549-v4.1.1' });
+```
+
+As with any target, passing means no rule found a violation, not that the component conforms: most criteria need a person to check them (see [What it checks and doesn't](#what-it-checks-and-doesnt)). A profile name core doesn't know is not an error: the scan runs without it and core logs a `console.warn`.
+
 ## Scanning with packs: standards, checklists and your own rules
 
 A pack brings rules, variants of core's rules, a standard or a checklist, and their profiles and messages, from a package of its own: a national standard such as RGAA, or your organisation's accessibility policy. `@surea11y/core` runs a pack as it runs its own rules and standards, so its findings, rollups and failure messages look like core's. Packs need `@surea11y/core` 1.11.1 or later.
