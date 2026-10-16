@@ -292,6 +292,16 @@ A scan can come back with nothing failed because it checked nothing. Since `@sur
 
 - **The element is not in the document the scan runs in** — detached (created with `document.createElement()` and never appended), or from another document. The scan runs on the global `document`, so it finds nothing to scan. Before core 1.10.0 it fell back to scanning the whole page instead. Attach the element before asserting. The same applies to a precomputed result whose `contextMatch.elementCount` is 0.
 - **A custom rule did not run** (`engineOptions.customRules`: no id, a `runInPage` that isn't a function, an invalid `meta`, a duplicate id). The result lists it in `skippedCustomRules`, and the message names it with the reason.
+
+  A custom rule your test turns off itself is not a gap, and doesn't fail the assertion. Core lists it in `skippedCustomRules` too, with `excluded: true` (`@surea11y/core` 1.12.0 and later):
+
+  ```js
+  // Two house rules; this test doesn't want org-b
+  expect(container).toHaveNoA11yViolations(
+    { customRules: [orgA, orgB] },
+    { includeRuleIds: ['org-a', 'org-b'], excludeRuleIds: ['org-b'] }
+  ); // passes when org-a finds nothing
+  ```
 - **A pack did not run** (`engineOptions.packs`, `@surea11y/core` 1.11 and later): its `core` range leaves out the installed core, it isn't valid, or its namespace clashes with another pack's. The result lists it in `skippedPacks`, and the message names it with the reason, so the assertion can't pass with the pack's rules never run.
 
 These are the gap kinds binding-base's `getScanGaps()` reports as `'context-not-found'`, `'custom-rule-skipped'` and `'pack-skipped'`; the fourth, `'context-partly-not-found'`, is only reported.

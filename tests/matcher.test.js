@@ -121,6 +121,23 @@ test('fails when a custom rule did not run, naming the rule and the reason', () 
   expect(message()).toMatch(/Custom rule "team-broken-rule" did not run: runInPage/);
 });
 
+test('a custom rule the test excluded does not fail the assertion; one the scan skipped still does', () => {
+  document.body.innerHTML = '<main><h1>Hi</h1></main>';
+  const rule = (id) => ({
+    id,
+    meta: { title: id, description: id, tags: ['org'], wcagSc: [], type: 'automatic' },
+    runInPage: "function (ctx) { return { ruleId: ctx.rule.ruleId, outcome: 'pass', occurrences: [] }; }"
+  });
+  const engineOptions = { customRules: [rule('org-a'), rule('org-b')] };
+
+  const excluded = toHaveNoA11yViolations(document.body, engineOptions, { includeRuleIds: ['org-a', 'org-b'], excludeRuleIds: ['org-b'] });
+  expect(excluded.pass).toBe(true);
+
+  const skipped = toHaveNoA11yViolations(document.body, { customRules: [rule('org-a'), { id: 'org-c', runInPage: 'not a function' }] });
+  expect(skipped.pass).toBe(false);
+  expect(skipped.message()).toMatch(/Custom rule "org-c" did not run/);
+});
+
 test('a precomputed result whose scope matched nothing fails; one whose scope partly matched does not', () => {
   const noMatch = { checksResults: [], contextMatch: { elementCount: 0, unmatchedSelectors: ['#app'] } };
   expect(toHaveNoA11yViolations(noMatch).pass).toBe(false);
