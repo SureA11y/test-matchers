@@ -52,6 +52,14 @@ export function toHaveNoA11yViolations(
   runOnly?: A11yRunOnly | null
 ): { pass: boolean; message: () => string };
 
+/**
+ * Installs @surea11y/core's internals hook in the test's jsdom window, so a
+ * scan reads the names, states and roles web components set through a
+ * private ElementInternals. Call it in a setup file, before any component is
+ * defined. `win` defaults to the global `window`.
+ */
+export function installInternalsHook(win?: Window): void;
+
 interface A11yCustomMatchers<R = unknown> {
   toHaveNoA11yViolations(engineOptions?: EngineOptions | StrictEngineOptions | null, runOnly?: A11yRunOnly | null): R;
 }
