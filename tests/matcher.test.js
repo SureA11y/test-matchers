@@ -1,6 +1,7 @@
 'use strict';
 
 const { toHaveNoA11yViolations } = require('../src/matcher');
+const { scanElement } = require('../src/scan-element');
 
 beforeEach(() => {
   document.title = 'Test Page';
@@ -216,6 +217,38 @@ describe('packs', () => {
     document.body.innerHTML = '<main><h1>Hi</h1><video autoplay src="intro.mp4"></video></main>';
     document.querySelector('video').muted = true;
     expect(toHaveNoA11yViolations(document, { packs: [acmePolicy], profile: 'acme-web-2026' }).pass).toBe(true);
+  });
+});
+
+describe('core 1.12', () => {
+  test('without the internals hook, an unnamed custom element is a question, and a failure message says how to read it', () => {
+    customElements.define('x-unhooked-button', class extends HTMLElement {});
+    document.body.innerHTML = '<main><h1>Hi</h1><x-unhooked-button role="button"></x-unhooked-button></main>';
+    expect(toHaveNoA11yViolations(document.body).pass).toBe(true);
+
+    document.body.insertAdjacentHTML('beforeend', '<img src="x.png">');
+    const { pass, message } = toHaveNoA11yViolations(document.body);
+    expect(pass).toBe(false);
+    expect(message()).toMatch(/1 custom element was asked about .*installInternalsHook\(\)/);
+  });
+
+  test('an empty heading fails a default call, and not a WCAG-only one', () => {
+    document.body.innerHTML = '<main><h1>Title</h1><h2></h2></main>';
+
+    const byDefault = toHaveNoA11yViolations(document.body);
+    expect(byDefault.pass).toBe(false);
+    expect(byDefault.message()).toMatch(/empty-heading/);
+
+    expect(toHaveNoA11yViolations(document.body, {}, { wcag: { version: '2.2', level: 'AA' } }).pass).toBe(true);
+    expect(toHaveNoA11yViolations(document.body, {}, { excludeRuleIds: ['empty-heading'] }).pass).toBe(true);
+  });
+
+  test('engineOptions.wcagLevel reaches the scan', () => {
+    document.body.innerHTML = '<main><h1>Hi</h1></main>';
+    const result = scanElement(document.body, { wcagLevel: 'AA' }, { includeRuleIds: ['contrast-computable'] });
+    expect(result.engine.wcagLevel).toBe('AA');
+    expect(result.rulesResults.map((r) => r.ruleId)).toEqual(['wcag-1.4.3-contrast-minimum']);
+    expect(toHaveNoA11yViolations(result).pass).toBe(true);
   });
 });
 

@@ -128,7 +128,7 @@ export default {
 
 The bundled `.d.ts` augments **both** Jest's global `jest.Matchers` interface and Vitest's `@vitest/expect` `Assertion`/`AsymmetricMatchersContaining` interfaces, with no `@types/jest` or `vitest` import required to ship it — whichever framework (or neither) is actually installed, only the matching augmentation takes effect; the other is simply inert. Nothing further to configure beyond making sure the setup file above is included in your `tsconfig`.
 
-`engineOptions` is typed with `@surea11y/core`'s own `EngineOptions` (or `StrictEngineOptions`, with `strictOptions: true`), `runOnly` with core's `RunOnly` and its other accepted forms (`A11yRunOnly`), and a precomputed result may be core's `ScanResult`; all are re-exported from this package (`import type { EngineOptions, RunOnly, ScanResult } from '@surea11y/test-matchers'`). `engineOptions.packs` takes the packs `definePack` from `@surea11y/core/pack` returns. A precomputed result's `skippedPacks` is typed on `A11yScanResult` beside `skippedCustomRules`.
+`engineOptions` is typed with `@surea11y/core`'s own `EngineOptions` (or `StrictEngineOptions`, with `strictOptions: true`), `runOnly` with core's `RunOnly` and its other accepted forms (`A11yRunOnly`), and a precomputed result may be core's `ScanResult`; all are re-exported from this package (`import type { EngineOptions, RunOnly, ScanResult } from '@surea11y/test-matchers'`). `engineOptions.packs` takes the packs `definePack` from `@surea11y/core/pack` returns. A precomputed result's `skippedPacks` is typed on `A11yScanResult` beside `skippedCustomRules`. `installInternalsHook(win?)` is typed too.
 
 ## Usage
 
@@ -201,6 +201,10 @@ The scan itself can throw, and the test then fails with the engine's error, whic
 expect(container).toHaveNoA11yViolations({ strictOptions: true, locale: 'fr' });
 ```
 
+### `installInternalsHook(win?)`
+
+Opt-in, for web components: installs core's internals hook in the test's jsdom window, so the scan reads names, states and roles that components set through a private `ElementInternals`. Call it once in your setup file, before any component is defined. `win` defaults to the global `window`. See [Web components](#web-components-names-set-through-elementinternals).
+
 ## Filtering and configuring scans (`engineOptions`)
 
 The second argument accepts anything `@surea11y/core` accepts. A few common cases:
@@ -235,6 +239,14 @@ expect(container).toHaveNoA11yViolations({}, { wcag: { version: '2.2', level: 'A
 // A pack's checklist profile, and the best practices
 expect(container).toHaveNoA11yViolations({ packs: [acmePolicy], profile: 'acme-web-2026' }, { bestPractices: true });
 ```
+
+**Gating on a level when you pick rules yourself.** `engineOptions.wcagLevel` (`@surea11y/core` 1.12.0 and later) sets the WCAG level of the criteria a scan reports, without changing which rules run. A target already implies its level; this is for a test that names rules or tags. `contrast-computable` checks 1.4.3 (AA) and 1.4.6 (AAA), so the scan below reports only 1.4.3:
+
+```js
+expect(container).toHaveNoA11yViolations({ wcagLevel: 'AA' }, { includeRuleIds: ['contrast-computable'] });
+```
+
+The assertion gates on `fail` outcomes, so this changes the criteria in the result (`rulesResults`, what a report built from it shows) rather than what fails the test.
 
 `runOnly` also takes rule ids and tags (`includeRuleIds`, `tags`, `excludeRuleIds`, ...), which add to a target's rules; the excludes apply after. A `runOnly` that selects anything replaces the selection in `engineOptions.rules`/`.tags` outright, so `{ rules: { include: 'img-alt-present' } }` beside a WCAG target runs the whole target: give a selection one way or the other, not both. Pass `{}` or `null` as `engineOptions` when you only need `runOnly`.
 
@@ -343,6 +355,66 @@ document.title = 'Test Page';
 document.documentElement.setAttribute('lang', 'en');
 ```
 
+## Web components: names set through `ElementInternals`
+
+Many web components keep their `ElementInternals` in a private field and name themselves, set their states or give themselves a role through it:
+
+```js
+class SubscribeCheckbox extends HTMLElement {
+  #internals = this.attachInternals();
+  constructor() {
+    super();
+    this.#internals.ariaLabel = 'Subscribe';
+    this.#internals.ariaChecked = 'false';
+  }
+}
+```
+
+No script can read those back, so by default the scan asks about such an element (`cantTell`) instead of judging it. That doesn't fail the test, but nothing is checked either, and a role set this way isn't seen at all. A failure message says when it happened: `1 custom element was asked about because the scan could not read the name or states they set through ElementInternals...`.
+
+`installInternalsHook()` lets the scan read them. Call it in the setup file, before any component is defined, so it sees every `attachInternals()` call:
+
+<table>
+<tr><th>Jest</th><th>Vitest</th></tr>
+<tr valign="top"><td>
+
+```js
+// jest.setup.js
+const {
+  toHaveNoA11yViolations,
+  installInternalsHook
+} = require('@surea11y/test-matchers');
+
+installInternalsHook();
+expect.extend({ toHaveNoA11yViolations });
+```
+
+</td><td>
+
+```js
+// vitest.setup.js
+import { expect } from 'vitest';
+import {
+  toHaveNoA11yViolations,
+  installInternalsHook
+} from '@surea11y/test-matchers';
+
+installInternalsHook();
+expect.extend({ toHaveNoA11yViolations });
+```
+
+</td></tr>
+</table>
+
+With it, the checkbox above passes: the scan reads its name and its `aria-checked`. A component that attaches internals but sets no name fails like any unnamed control, and a component that is a `switch` only through its internals (`this.#internals.role = 'switch'`) is checked as one, so it fails without a name. To see it worked, look at a scan result's `engine.environment.internalsHook`, which is `'early'` (or `'late'`, see below) once the hook is installed, and absent without it.
+
+Things to know:
+
+- **Before any component is defined.** An element that attached its internals before the hook isn't in its record. The setup file runs before your test file imports any component, so call it there, not in a test.
+- **It changes the test window.** It wraps `HTMLElement.prototype.attachInternals` (the component gets the same internals back), and keeps a record under a global symbol. That's harmless in a test, and it's why the hook is opt-in.
+- **Jest's jsdom.** `jest-environment-jsdom` 30 ships jsdom 26, where a component that sets an ARIA property on its internals (`internals.ariaLabel = ...`) throws, hook or not. Vitest with jsdom 29 handles it. With Jest, the hook still lets the scan tell that a component which never attached internals has none.
+- **Vitest and `'late'`.** Under Vitest, `@surea11y/core` 1.12.0 records the hook as `'late'`, though it ran first, because Vitest defines the window's globals differently from a page. Names and states set through internals are still read; a component that never attached internals stays a question until core reads Vitest's window as it reads a page's.
+
 ## Failure messages
 
 When the assertion fails, the message lists every occurrence (not just every rule — one rule can flag several elements), with the rule ID, severity, a human-readable summary, the failing element's selector, and a fix hint where available. It names the `@surea11y/core` release that produced the result, to quote in a bug report:
@@ -354,12 +426,14 @@ expected no accessibility violations, but found 1:
    at body > img
    Add an alt attribute that says what the image shows, or alt="" if the image is purely decorative.
 
-Scanned with @surea11y/core 1.11.1.
+Scanned with @surea11y/core 1.12.0.
 
 1 rule(s) need manual review (cantTell, not counted as failures): manual-review
 ```
 
 An element inside a shadow root (with `engineOptions.includeShadowDom`) is located through its shadow hosts, outermost first: `at #host >>> img`.
+
+Before the version line, the message can carry a note on how the scan ran. Today that's the [internals hook](#web-components-names-set-through-elementinternals): when the scan asked about custom elements it could have read with it, a line says how many and to install it.
 
 The last line is the `cantTell` note: any `cantTell` results alongside the failures are appended as a separate note so they stay visible without affecting `pass`/`fail`. With a vague link beside the image (`<a href="/pricing">Click here</a>`), it reads:
 
@@ -376,7 +450,7 @@ The element given to toHaveNoA11yViolations() is not in the document the scan ru
 
 Nothing was scanned: the scan scope matched no element ("[data-surea11y-jest-scope=\"…\"]").
 
-Scanned with @surea11y/core 1.11.1.
+Scanned with @surea11y/core 1.12.0.
 ```
 
 A pack that did not run is named with the reason; the findings line above it covers the rules that did run:
@@ -386,12 +460,44 @@ expected no accessibility violations, but the scan left out what it was asked to
 
 No accessibility violations found in what was scanned.
 
-Pack "@acme/a11y-policy" did not run: it supports core ^2.0.0, and this is core 1.11.1.
+Pack "@acme/a11y-policy" did not run: it supports core ^2.0.0, and this is core 1.12.0.
 
-Scanned with @surea11y/core 1.11.1.
+Scanned with @surea11y/core 1.12.0.
 
 2 rule(s) need manual review (cantTell, not counted as failures): contrast-computable, manual-review
 ```
+
+## Upgrading to `@surea11y/core` 1.12
+
+This release requires `@surea11y/core` 1.12.0. What changes for a test (core's [`CHANGELOG.md`](https://github.com/SureA11y/core/blob/main/CHANGELOG.md) has the full list):
+
+- **An empty heading now fails a default call.** `empty-heading` used to ask about a heading with no accessible name; it now fails it. It's a best-practice rule, and a call with no selection runs best practices, so a component that renders `<h2></h2>` (often a heading whose text comes from a prop that's empty in the test) now fails:
+
+  ```js
+  render(<Card title="" />);
+  expect(container).toHaveNoA11yViolations(); // fails: empty-heading
+  ```
+
+  That's a real barrier: a screen reader announces a heading with nothing in it. Give the test real content, or fix the component. To check WCAG only, which leaves best practices out, pass a target:
+
+  ```js
+  expect(container).toHaveNoA11yViolations({}, { wcag: { version: '2.2', level: 'AA' } });
+  ```
+
+  Turning the one rule off also works, but it hides the barrier for every heading in the test, so prefer the fixes above:
+
+  ```js
+  expect(container).toHaveNoA11yViolations({}, { excludeRuleIds: ['empty-heading'] });
+  ```
+
+  A heading whose name may come from content no script can read is still asked about, which doesn't fail the test.
+- **Unnamed custom elements are questions, not failures.** A defined custom element with no visible name may name itself through `ElementInternals`, so it's now `cantTell` where it used to fail. A test that expected such a failure passes now; [`installInternalsHook()`](#web-components-names-set-through-elementinternals) lets the scan decide.
+- **A custom rule your test excludes no longer fails it** as "did not run" ([above](#scans-that-left-something-out)).
+- **`engineOptions.wcagLevel`** sets the level of the criteria reported, without changing which rules run ([above](#choosing-a-wcag-target-runonly)).
+- **Rule ids in another case select their rule**: `includeRuleIds: ['IMG-ALT-PRESENT']` used to throw `INVALID_RUN_ONLY`.
+- **`runOnly.optInTags` on its own throws** `INVALID_RUN_ONLY`; it was accepted and did nothing. Opt-in rules are unlocked with `engineOptions.optInRules`.
+- **An inline `policyContract` with an unknown value** in `allowedOutcomes` drops that value with a warning. It used to turn every check into `cantTell`, which made every assertion pass.
+- **Messages:** a failure message can carry a note about the [internals hook](#web-components-names-set-through-elementinternals).
 
 ## What changes with `@surea11y/core` 1.11
 
@@ -422,6 +528,7 @@ npm run test:vitest  # Vitest only
 This package tests itself under both frameworks it supports:
 
 - [`tests/matcher.test.js`](./tests/matcher.test.js) and [`tests/scan-element.test.js`](./tests/scan-element.test.js) — the exhaustive logic suite (rule scoping, document-wide rules, `cantTell` handling, scans that left something out, packs that run and packs that don't, shadow-DOM locations, `engineOptions` and `runOnly` passthrough, WCAG targets and best practices, `INVALID_RUN_ONLY` and `INVALID_ENGINE_OPTIONS`, thrown-input validation, mocked-throw cleanup), run under Jest since this is where the underlying logic lives; it doesn't depend on which framework eventually calls it.
+- [`tests/internals-hook.test.js`](./tests/internals-hook.test.js) and [`tests/internals-hook.vitest.test.js`](./tests/internals-hook.vitest.test.js) — `installInternalsHook()` under each runner: under Jest, the hook records itself early and a component with no internals is no longer a question; under Vitest, a component that names itself through private internals passes.
 - [`tests/types.test.js`](./tests/types.test.js) — compiles [`tests/types/usage.ts`](./tests/types/usage.ts) with `tsc --strict` against `@surea11y/core`'s own types, so the bundled `.d.ts` can't drift from the engine's.
 - [`tests/matcher.vitest.test.js`](./tests/matcher.vitest.test.js) — proves the same matcher, completely unmodified, integrates correctly with Vitest's own `expect.extend` (registration, `.not`, `engineOptions` and `runOnly` passthrough, packs, precomputed-result assertions, thrown `TypeError`), so this isn't just a documentation claim.
 
