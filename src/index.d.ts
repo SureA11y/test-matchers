@@ -30,14 +30,15 @@ export type A11yRunOnly = RunOnly | LegacyTagRunOnly | StringList;
  * @surea11y/core ScanResult fits; so does a hand-built object with just
  * `checksResults`. A result whose `contextMatch.elementCount` is 0, or that
  * lists `skippedCustomRules` (@surea11y/core 1.10.0 and later) or
- * `skippedPacks` (1.11 and later), fails the assertion.
+ * `skippedPacks` (1.11 and later), fails the assertion. A custom rule the
+ * test excluded itself (`excluded: true`, core 1.12.0) doesn't.
  */
 export interface A11yScanResult {
   checksResults: ReadonlyArray<{ ruleId: string; outcome: string; severity?: string; occurrences: readonly unknown[] }>;
   /** How the scan's contextSelector resolved; null without one. */
   contextMatch?: { elementCount: number; unmatchedSelectors: string[] } | null;
-  /** Custom rules that did not run, and why. */
-  skippedCustomRules?: Array<{ id: string | null; reason: string }>;
+  /** Custom rules that did not run, and why; `excluded` when the test's own selection left the rule out. */
+  skippedCustomRules?: Array<{ id: string | null; reason: string; excluded?: true }>;
   /** Packs that did not run, and why. */
   skippedPacks?: Array<{ name: string | null; reason: string }>;
   /** `version` is the @surea11y/core release that produced the result. */

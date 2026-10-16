@@ -26,7 +26,7 @@ const reused = toHaveNoA11yViolations(result);
 const handBuilt: A11yScanResult = {
   checksResults: [{ ruleId: 'img-alt-present', outcome: 'fail', occurrences: [] }],
   contextMatch: { elementCount: 0, unmatchedSelectors: ['#app'] },
-  skippedCustomRules: [{ id: null, reason: 'no id' }],
+  skippedCustomRules: [{ id: null, reason: 'no id' }, { id: 'org-b', reason: 'excluded by the selection.', excluded: true }],
   skippedPacks: [{ name: '@acme/a11y-policy', reason: 'it supports core ^2.0.0, and this is core 1.11.1' }],
   engine: { version: '1.11.1' }
 };
