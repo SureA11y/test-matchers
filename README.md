@@ -13,7 +13,7 @@ surea11y's engine is synchronous, so this matcher is too. No `await`, no forgett
 ## Quick start
 
 ```sh
-npm install --save-dev @surea11y/test-matchers
+npm install --save-dev @surea11y/core @surea11y/test-matchers
 ```
 
 ```js
@@ -37,7 +37,7 @@ test('MyComponent has no accessibility violations', () => {
 });
 ```
 
-`@surea11y/core` is installed with it; there is nothing else to add. Full [Setup](#setup), including the config files and TypeScript, is below.
+`@surea11y/core`, the engine, is a peer dependency: install it beside this package, 1.12.0 or later, as the line above does, so your tests and anything else in your project that uses core share one copy. Full [Setup](#setup), including the config files and TypeScript, is below.
 
 ## Do you need this package?
 
@@ -76,8 +76,10 @@ Your test environment must be jsdom-based — this matcher scans whatever `docum
 ## Install
 
 ```sh
-npm install --save-dev @surea11y/test-matchers
+npm install --save-dev @surea11y/core @surea11y/test-matchers
 ```
+
+`@surea11y/core` 1.12.0 or later is a peer dependency, so name it yourself: Yarn, npm 6 and npm with `legacy-peer-deps` don't install peers for you, and npm 7 and later refuse the install when your project pins an older core. Up to 1.3.0 core came with this package as a regular dependency; if your `package.json` names only `@surea11y/test-matchers`, add `@surea11y/core` when you upgrade.
 
 ## Setup
 
