@@ -37,7 +37,7 @@ test('MyComponent has no accessibility violations', () => {
 });
 ```
 
-`@surea11y/core`, the engine, is a peer dependency: install it beside this package, 1.12.0 or later, as the line above does, so your tests and anything else in your project that uses core share one copy. Full [Setup](#setup), including the config files and TypeScript, is below.
+`@surea11y/core`, the engine, comes with this package, but list it in your own `package.json` too, as the line above does: 2.0 will no longer install it for you (see [Install](#install)). Full [Setup](#setup), including the config files and TypeScript, is below.
 
 ## Do you need this package?
 
@@ -79,7 +79,9 @@ Your test environment must be jsdom-based — this matcher scans whatever `docum
 npm install --save-dev @surea11y/core @surea11y/test-matchers
 ```
 
-`@surea11y/core` 1.12.0 or later is a peer dependency, so name it yourself: Yarn, npm 6 and npm with `legacy-peer-deps` don't install peers for you, and npm 7 and later refuse the install when your project pins an older core. Up to 1.3.0 core came with this package as a regular dependency; if your `package.json` names only `@surea11y/test-matchers`, add `@surea11y/core` when you upgrade.
+`@surea11y/core` 1.12.0 or later, the engine, comes with this package as a regular dependency, so a project that doesn't list it still works. Listing it yourself, as the line above does, gives your tests and anything else in your project that uses core one shared copy.
+
+**Coming in 2.0:** core becomes a peer dependency, so this package will no longer install it for you. Add `@surea11y/core` to your `package.json` now and 2.0 needs no change.
 
 ## Setup
 
