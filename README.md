@@ -271,6 +271,14 @@ As with any target, passing means no rule found a violation, not that the compon
 
 A pack brings rules, variants of core's rules, a standard or a checklist, and their profiles and messages, from a package of its own: a national standard such as RGAA, or your organisation's accessibility policy. `@surea11y/core` runs a pack as it runs its own rules and standards, so its findings, rollups and failure messages look like core's. Packs need `@surea11y/core` 1.11.1 or later.
 
+Install a published pack in your project, beside core and this package:
+
+```bash
+npm install --save-dev @surea11y/core @surea11y/test-matchers @acme/a11y-policy
+```
+
+Your project, this package and the pack then share one copy of core, so the core that checks the pack is the one that runs it. With two copies, a scan can skip the pack (see "When a pack doesn't run" below).
+
 The matcher scans in Node, so a pack is passed as the object itself, in `engineOptions.packs`, and its profile is chosen with `engineOptions.profile`:
 
 ```js
@@ -287,7 +295,7 @@ A pack's own rules appear in the result like core's, with ids that start with it
 
 **Writing a pack.** A pack is an object made with `definePack` from `@surea11y/core/pack`. [`examples/acme-policy-pack.js`](./examples/acme-policy-pack.js) is a small one: a house rule, a checklist profile (WCAG 2.2 A and AA, `region`, and the house rule) and two checklist items. [`examples/pack.test.js`](./examples/pack.test.js) (Jest) and [`examples/pack.vitest.test.js`](./examples/pack.vitest.test.js) (Vitest) use it as a test gate. For a pack of your own, `npx surea11y-pack new <folder>` (from `@surea11y/core`) writes a package that works as generated, with its tests, docs and lint; core's [`PACKS.md`](https://github.com/SureA11y/core/blob/main/docs/PACKS.md) is the guide.
 
-**When a pack doesn't run.** A pack core can't run (its `core` range leaves out the installed core, it isn't valid, or its namespace clashes with another pack's) is left out of the scan and listed in the result's `skippedPacks` with the reason. The matcher fails on it ([below](#scans-that-left-something-out)) rather than passing with the pack's rules never run. Install the pack beside this package, so npm resolves one `@surea11y/core` for both.
+**When a pack doesn't run.** A pack core can't run (its `core` range leaves out the installed core, it isn't valid, or its namespace clashes with another pack's) is left out of the scan and listed in the result's `skippedPacks` with the reason. The matcher fails on it ([below](#scans-that-left-something-out)) rather than passing with the pack's rules never run.
 
 ## What it checks and doesn't
 
