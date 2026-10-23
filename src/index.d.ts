@@ -49,8 +49,28 @@ export interface A11yScanResult {
 export function toHaveNoA11yViolations(
   received: Node | ScanResult | A11yScanResult,
   engineOptions?: EngineOptions | StrictEngineOptions | null,
-  runOnly?: A11yRunOnly | null
+  runOnly?: A11yRunOnly | null,
+  options?: A11yMatcherOptions | null
 ): { pass: boolean; message: () => string };
+
+/** A rule result's severity, least to most severe. */
+export type A11ySeverity = 'minor' | 'moderate' | 'serious' | 'critical';
+
+export interface A11yMatcherOptions {
+  /**
+   * Only failing rules of this severity or above fail the assertion, as
+   * `surea11y scan --fail-on-severity` counts them; the message still lists
+   * every failure, marking those below the level. null turns a configured
+   * default off for one assertion. Needs @surea11y/binding-base 1.6.0.
+   */
+  failOnSeverity?: A11ySeverity | null;
+}
+
+/**
+ * Sets what every toHaveNoA11yViolations() assertion uses by default, from a
+ * setup file. An assertion's own options override it. null clears it.
+ */
+export function configureA11yMatchers(options: A11yMatcherOptions | null): void;
 
 /**
  * Installs @surea11y/core's internals hook in the test's jsdom window, so a
@@ -89,7 +109,11 @@ export function toHaveAnnounced(
 ): { pass: boolean; message: () => string };
 
 interface A11yCustomMatchers<R = unknown> {
-  toHaveNoA11yViolations(engineOptions?: EngineOptions | StrictEngineOptions | null, runOnly?: A11yRunOnly | null): R;
+  toHaveNoA11yViolations(
+    engineOptions?: EngineOptions | StrictEngineOptions | null,
+    runOnly?: A11yRunOnly | null,
+    options?: A11yMatcherOptions | null
+  ): R;
   toHaveAnnounced(expected: string | RegExp): R;
 }
 

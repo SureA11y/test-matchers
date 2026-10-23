@@ -8,7 +8,8 @@ import {
   installListenerHook,
   installLiveRegionHook,
   toHaveAnnounced,
-  toHaveNoA11yViolations
+  toHaveNoA11yViolations,
+  configureA11yMatchers
 } from '../../src/index';
 import type { A11yRunOnly, A11yScanResult, EngineOptions, StrictEngineOptions } from '../../src/index';
 
@@ -33,6 +34,10 @@ installListenerHook(window);
 installLiveRegionHook();
 installLiveRegionHook(window);
 const announced: boolean = toHaveAnnounced(document, /Saved/).pass;
+configureA11yMatchers({ failOnSeverity: 'serious' });
+configureA11yMatchers(null);
+const gated = toHaveNoA11yViolations(container, null, null, { failOnSeverity: 'critical' });
+const ungated = toHaveNoA11yViolations(container, null, null, { failOnSeverity: null });
 
 const result: ScanResult = runDomRulesInPage(null, '#main', {}, null);
 const reused = toHaveNoA11yViolations(result);

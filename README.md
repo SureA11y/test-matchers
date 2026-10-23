@@ -182,7 +182,7 @@ If `#main` matches nothing, `@surea11y/core` (1.10.0 and later) scans nothing an
 
 ## API
 
-### `toHaveNoA11yViolations(received, engineOptions?, runOnly?)`
+### `toHaveNoA11yViolations(received, engineOptions?, runOnly?, options?)`
 
 | Param | Type | Meaning |
 |---|---|---|
@@ -205,6 +205,10 @@ The scan itself can throw, and the test then fails with the engine's error, whic
 expect(container).toHaveNoA11yViolations({ strictOptions: true, locale: 'fr' });
 ```
 
+### `configureA11yMatchers({ failOnSeverity })`
+
+Sets what every `toHaveNoA11yViolations()` assertion uses unless it says otherwise, from your setup file. `failOnSeverity` (`'critical'`, `'serious'`, `'moderate'` or `'minor'`) makes only failing rules of that severity or above fail the assertion. `configureA11yMatchers(null)` clears it. Needs `@surea11y/binding-base` 1.6.0 (installed with this package). See [Failing only on serious problems](#failing-only-on-serious-problems).
+
 ### `installInternalsHook(win?)`
 
 Opt-in, for web components: installs core's internals hook in the test's jsdom window, so the scan reads names, states and roles that components set through a private `ElementInternals`. Call it once in your setup file, before any component is defined. `win` defaults to the global `window`. See [Web components](#web-components-names-set-through-elementinternals).
@@ -220,6 +224,26 @@ Opt-in, for status messages (`@surea11y/core` 1.14.0 and later): installs core's
 ### `toHaveAnnounced(expected)`
 
 `expect(container).toHaveAnnounced('Saved')` passes when a live region in `container` (an element, or `document` for the whole page) was given a text that contains `expected` (whitespace collapsed), or matches it when it's a `RegExp`, as the live-region hook recorded it. Without the hook it fails and says how to install it. See [Status messages](#status-messages-tohaveannounced).
+
+## Failing only on serious problems
+
+Every rule result has a severity: `critical`, `serious`, `moderate` or `minor` (a profile can set its own). To start by failing tests on serious problems while the rest are still reported and fixed over time, set a level for the whole suite in your setup file:
+
+```js
+// jest.setup.js (vitest.setup.js: the same, with import)
+const { toHaveNoA11yViolations, configureA11yMatchers } = require('@surea11y/test-matchers');
+
+expect.extend({ toHaveNoA11yViolations });
+configureA11yMatchers({ failOnSeverity: 'serious' });
+```
+
+or for one assertion, as the third argument after `engineOptions` and `runOnly`, which overrides the default (`failOnSeverity: null` turns it off there):
+
+```js
+expect(container).toHaveNoA11yViolations(null, null, { failOnSeverity: 'critical' });
+```
+
+Only failing rules at that level or above fail the assertion: the same failures `surea11y scan --fail-on-severity` counts. When it does fail, the message lists every failure and marks those below the level `(moderate, below failOnSeverity serious, does not fail the test)`. A passing assertion prints nothing, as Jest and Vitest do for every passing assertion. `fail` keeps its meaning, a definite violation; the level only picks which ones fail the test. Scan gaps (a scope that matched nothing, a custom rule or pack that didn't run) fail the assertion whatever the level.
 
 ## Filtering and configuring scans (`engineOptions`)
 

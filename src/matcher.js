@@ -1,6 +1,7 @@
 'use strict';
 
-const { formatFailures, getScanGaps } = require('@surea11y/binding-base');
+const bindingBase = require('@surea11y/binding-base');
+const { formatFailures, getScanGaps } = bindingBase;
 const { scanElement } = require('./scan-element');
 
 // Scan gaps (binding-base's getScanGaps()) that fail the assertion: a scope
@@ -16,7 +17,49 @@ const DETACHED_NOTE =
   '(it is detached, or belongs to another document), so nothing in it was checked. ' +
   'Attach it to the document before asserting.';
 
-// Jest custom matcher: expect(received).toHaveNoA11yViolations(engineOptions?, runOnly?)
+const SEVERITIES = ['minor', 'moderate', 'serious', 'critical'];
+
+// The level every assertion gates on unless it says otherwise:
+// configureA11yMatchers({ failOnSeverity }) in a setup file.
+const defaults = { failOnSeverity: null };
+
+function readLevel(value, where) {
+  if (value === undefined || value === null) return null;
+  const level = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  if (!SEVERITIES.includes(level)) {
+    throw new TypeError(`${where} must be "critical", "serious", "moderate" or "minor", not ${JSON.stringify(value)}.`);
+  }
+  return level;
+}
+
+function readOptions(options, where) {
+  if (options === undefined || options === null) return {};
+  if (typeof options !== 'object' || Array.isArray(options)) {
+    throw new TypeError(`${where}: options must be an object, such as { failOnSeverity: 'serious' }.`);
+  }
+  const unknown = Object.keys(options).filter((k) => k !== 'failOnSeverity');
+  if (unknown.length) {
+    throw new TypeError(`${where}: no option named ${unknown.map((k) => `"${k}"`).join(', ')}; use failOnSeverity.`);
+  }
+  return options;
+}
+
+// Sets what every toHaveNoA11yViolations() assertion uses by default, from a
+// setup file: { failOnSeverity } makes only failing rules of that severity or
+// above fail the assertion, as `surea11y scan --fail-on-severity` does. An
+// assertion's own third argument overrides it, and failOnSeverity: null
+// there turns the gate off for that one. Called again, it replaces the
+// default; with null, it clears it.
+function configureA11yMatchers(options) {
+  const { failOnSeverity } = readOptions(options, 'configureA11yMatchers()');
+  const level = readLevel(failOnSeverity, 'configureA11yMatchers(): failOnSeverity');
+  if (level && typeof bindingBase.getGatingFailures !== 'function') {
+    throw new Error('configureA11yMatchers(): failOnSeverity needs @surea11y/binding-base 1.6.0 or later.');
+  }
+  defaults.failOnSeverity = level;
+}
+
+// Jest custom matcher: expect(received).toHaveNoA11yViolations(engineOptions?, runOnly?, options?)
 //
 // `received` is either:
 //   - a DOM Element/Document (the common case -- e.g. React Testing
@@ -33,7 +76,19 @@ const DETACHED_NOTE =
 // `cantTell` is advisory everywhere else in surea11y (the CLI's exit code,
 // docs/TROUBLESHOOTING.md), and this matcher keeps that contract rather
 // than inventing a stricter one.
-function toHaveNoA11yViolations(received, engineOptions, runOnly) {
+// `options.failOnSeverity` (or the configured default) makes only failing
+// rules of that severity or above fail the assertion; the message still
+// lists every failure, marking those below the level. `fail` keeps its
+// meaning, a definite violation: the level only picks which ones gate.
+function toHaveNoA11yViolations(received, engineOptions, runOnly, options) {
+  const own = readOptions(options, 'toHaveNoA11yViolations()');
+  const level =
+    'failOnSeverity' in own
+      ? readLevel(own.failOnSeverity, 'toHaveNoA11yViolations(): failOnSeverity')
+      : defaults.failOnSeverity;
+  if (level && typeof bindingBase.getGatingFailures !== 'function') {
+    throw new Error('toHaveNoA11yViolations(): failOnSeverity needs @surea11y/binding-base 1.6.0 or later.');
+  }
   let result;
   let scannedElement = false;
   if (received && Array.isArray(received.checksResults)) {
@@ -45,20 +100,25 @@ function toHaveNoA11yViolations(received, engineOptions, runOnly) {
     throw new TypeError('toHaveNoA11yViolations() expects a DOM element/document or a surea11y scan result.');
   }
 
-  const fails = result.checksResults.filter((r) => r.outcome === 'fail');
+  const allFails = result.checksResults.filter((r) => r.outcome === 'fail');
+  const fails = level ? bindingBase.getGatingFailures(result, { failOnSeverity: level }) : allFails;
   const cantTells = result.checksResults.filter((r) => r.outcome === 'cantTell');
   const failingGaps = getScanGaps(result).filter((g) => FAILING_GAPS.includes(g.kind));
   const pass = fails.length === 0 && failingGaps.length === 0;
 
   const message = () => {
     if (pass) {
-      return 'expected the element to have accessibility violations, but none were found';
+      return level
+        ? `expected the element to have accessibility violations of severity ${level} or above, but none were found`
+        : 'expected the element to have accessibility violations, but none were found';
     }
     const header = fails.length
-      ? `expected no accessibility violations, but found ${fails.length}:`
+      ? level
+        ? `expected no accessibility violations of severity ${level} or above, but found ${fails.length}:`
+        : `expected no accessibility violations, but found ${fails.length}:`
       : 'expected no accessibility violations, but the scan left out what it was asked to check:';
     const scopeNotFound = scannedElement && failingGaps.some((g) => g.kind === 'context-not-found');
-    const details = formatFailures(result, { outcomes: ['fail'] });
+    const details = formatFailures(result, level ? { outcomes: ['fail'], failOnSeverity: level } : { outcomes: ['fail'] });
     const note = cantTells.length
       ? `\n\n${cantTells.length} rule(s) need manual review (cantTell, not counted as failures): ${cantTells.map((r) => r.ruleId).join(', ')}`
       : '';
@@ -68,4 +128,4 @@ function toHaveNoA11yViolations(received, engineOptions, runOnly) {
   return { pass, message };
 }
 
-module.exports = { toHaveNoA11yViolations };
+module.exports = { toHaveNoA11yViolations, configureA11yMatchers };
