@@ -213,6 +213,14 @@ Opt-in, for web components: installs core's internals hook in the test's jsdom w
 
 Opt-in, for code that adds its event listeners from script (`@surea11y/core` 1.14.0 and later): installs core's listener hook in the test's jsdom window, so the keyboard rules see the click, key, focus and mouse listeners the code under test adds with `addEventListener` or an `onclick`-style property. Call it once in your setup file, before that code adds any. `win` defaults to the global `window`. See [Listeners added from script](#listeners-added-from-script).
 
+### `installLiveRegionHook(win?)`
+
+Opt-in, for status messages (`@surea11y/core` 1.14.0 and later): installs core's live-region hook in the test's jsdom window, which records what live regions are given, for `toHaveAnnounced()` and for `live-region-announcements`. Call it once in your setup file. `win` defaults to the global `window`. See [Status messages](#status-messages-tohaveannounced).
+
+### `toHaveAnnounced(expected)`
+
+`expect(container).toHaveAnnounced('Saved')` passes when a live region in `container` (an element, or `document` for the whole page) was given a text that contains `expected` (whitespace collapsed), or matches it when it's a `RegExp`, as the live-region hook recorded it. Without the hook it fails and says how to install it. See [Status messages](#status-messages-tohaveannounced).
+
 ## Filtering and configuring scans (`engineOptions`)
 
 The second argument accepts anything `@surea11y/core` accepts. A few common cases:
@@ -464,6 +472,36 @@ Things to know:
 - **Vitest.** The hook is recorded as `'early'` under Vitest too, so the button above fails there as it does under Jest.
 - **It changes the test window.** It wraps `addEventListener`, `removeEventListener` and the `on…` property setters (listeners themselves aren't wrapped, and run as before), and keeps a record under a global symbol. That's harmless in a test, and it's why the hook is opt-in.
 
+## Status messages: `toHaveAnnounced()`
+
+A status message ("Saved", "3 results") reaches a screen reader when a live region's content changes while the screen reader can reach it (WCAG 4.1.3). `toHaveAnnounced()` checks that your code made one available, with `installLiveRegionHook()` (`@surea11y/core` 1.14.0 and later) in the setup file:
+
+```js
+// jest.setup.js (vitest.setup.js: the same, with import)
+const {
+  toHaveNoA11yViolations,
+  toHaveAnnounced,
+  installLiveRegionHook
+} = require('@surea11y/test-matchers');
+
+installLiveRegionHook();
+expect.extend({ toHaveNoA11yViolations, toHaveAnnounced });
+```
+
+```js
+test('saving says so', async () => {
+  const { container } = render(<Editor />);
+  await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+  expect(container).toHaveAnnounced('Saved');
+});
+```
+
+Things to know:
+
+- **What it checks.** The text a shown live region, reachable by assistive technology, was given: what your code made available to announce. Not what a screen reader said, which depends on the screen reader.
+- **Put the region in the page before its text.** A live region rendered with its text already in it, or shown and filled at once, is commonly not announced, so it doesn't count: the toast above passes only if the empty region was on the page before the click. `live-region-announcements` asks about such a region (`LIVE_REGION_INSERTED_WITH_CONTENT`, `LIVE_REGION_SHOWN_AND_FILLED`), and so does `toHaveNoA11yViolations()`'s scan, which lists it under manual review. `role="alert"` is the exception: an alert rendered with its text counts.
+- **The record lasts as long as the window.** Under Jest and Vitest each test file gets a fresh window; within a file, earlier tests' messages are still there, so look in the `container` of the test at hand, or assert on a text only that test produces.
+
 ## Failure messages
 
 When the assertion fails, the message lists every occurrence (not just every rule — one rule can flag several elements), with the rule ID, severity, a human-readable summary, the failing element's selector, and a fix hint where available. It names the `@surea11y/core` release that produced the result, to quote in a bug report:
@@ -521,6 +559,7 @@ Scanned with @surea11y/core 1.12.0.
 What a scan through these matchers shows differently with `@surea11y/core` 1.14.0 (core's [`CHANGELOG.md`](https://github.com/SureA11y/core/blob/main/CHANGELOG.md) has the full list):
 
 - **Listeners added from script.** With [`installListenerHook()`](#listeners-added-from-script), `click-handler-keyboard-operable` judges a click listener added with `addEventListener` as an inline `onclick`, and fails a focusable control that no key listener can reach (`CLICK_HANDLER_NO_KEY_LISTENER`); `mouse-only-event-handlers` asks about pointer listeners added from script. Both rules' messages now say "click handler" rather than "onclick handler".
+- **Status messages.** `live-region-announcements` (4.1.3) asks about a live region hidden with `aria-hidden` or `inert`, or left `aria-busy`. With [`installLiveRegionHook()`](#status-messages-tohaveannounced) it also asks about one rendered with its text or shown and filled at once, and `toHaveAnnounced()` checks what your code made available to announce.
 - **Roles that depend on context.** `aria-allowed-attr` no longer fails `aria-expanded` on a text input whose `list` names a `<datalist>` (a combobox), and now judges `<td>`: `cell` in a table, `gridcell` in a grid. `label-in-name` checks a `<td>` in a grid. `heading-order` and `page-has-heading-one` count a heading marked `role="none"` that can take focus or has a global ARIA attribute, as browsers do.
 
 ## Upgrading to `@surea11y/core` 1.12

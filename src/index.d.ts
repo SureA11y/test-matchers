@@ -68,8 +68,29 @@ export function installInternalsHook(win?: Window): void;
  */
 export function installListenerHook(win?: Window): void;
 
+/**
+ * Installs @surea11y/core's live-region hook (core 1.14.0 and later) in the
+ * test's jsdom window, which records what live regions are given, for
+ * toHaveAnnounced(). Call it in a setup file. `win` defaults to the global
+ * `window`.
+ */
+export function installLiveRegionHook(win?: Window): void;
+
+/**
+ * Passes when a live region in `received` (an element, or a document for the
+ * whole page) was given a text that contains `expected` (whitespace
+ * collapsed) or matches it, as the live-region hook recorded it: what the
+ * page made available to announce, not what a screen reader said. Fails,
+ * saying so, without the hook.
+ */
+export function toHaveAnnounced(
+  received: Node,
+  expected: string | RegExp
+): { pass: boolean; message: () => string };
+
 interface A11yCustomMatchers<R = unknown> {
   toHaveNoA11yViolations(engineOptions?: EngineOptions | StrictEngineOptions | null, runOnly?: A11yRunOnly | null): R;
+  toHaveAnnounced(expected: string | RegExp): R;
 }
 
 declare global {
