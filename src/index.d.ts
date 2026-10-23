@@ -54,17 +54,25 @@ export interface A11yScanResult {
   [key: string]: unknown;
 }
 
+/** A rule result's severity, least to most severe. */
+export type A11ySeverity = 'minor' | 'moderate' | 'serious' | 'critical';
+
 /**
- * toHaveNoA11yViolations()'s options form, in place of (engineOptions,
- * runOnly). Failures gate the assertion, counted by each occurrence's own
- * outcome; questions (cantTell) don't, unless `leanFail` adds those that
- * lean fail.
+ * Which findings fail toHaveNoA11yViolations() and how its message lists
+ * them: an assertion's own (its options form, or the third argument after
+ * engineOptions and runOnly), or every assertion's default, set with
+ * configureA11yMatchers(). Failures gate the assertion, counted by each
+ * occurrence's own outcome; questions (cantTell) don't, unless `leanFail`
+ * adds those that lean fail.
  */
-export interface A11yMatcherOptions {
-  /** core's third scan argument. Ignored for a precomputed result. */
-  engineOptions?: EngineOptions | StrictEngineOptions | null;
-  /** core's fourth scan argument. Ignored for a precomputed result. */
-  runOnly?: A11yRunOnly | null;
+export interface A11yGateOptions {
+  /**
+   * Only findings of rules of this severity or above fail the assertion, as
+   * `surea11y scan --fail-on-severity` counts them; the message still lists
+   * every failure, marking those below the level. null turns a configured
+   * default off for one assertion. Needs @surea11y/binding-base 1.6.0.
+   */
+  failOnSeverity?: A11ySeverity | null;
   /**
    * Also fail on the questions that lean fail (core's leaningFailures(),
    * @surea11y/core 1.14.0 and later), leaving out the rules whose WCAG
@@ -77,15 +85,31 @@ export interface A11yMatcherOptions {
   howToCheck?: boolean;
 }
 
+/** toHaveNoA11yViolations()'s options form, in place of (engineOptions, runOnly, options). */
+export interface A11yMatcherOptions extends A11yGateOptions {
+  /** core's third scan argument. Ignored for a precomputed result. */
+  engineOptions?: EngineOptions | StrictEngineOptions | null;
+  /** core's fourth scan argument. Ignored for a precomputed result. */
+  runOnly?: A11yRunOnly | null;
+}
+
 export function toHaveNoA11yViolations(
   received: Node | ScanResult | A11yScanResult,
   engineOptions?: EngineOptions | StrictEngineOptions | null,
-  runOnly?: A11yRunOnly | null
+  runOnly?: A11yRunOnly | null,
+  options?: A11yGateOptions | null
 ): { pass: boolean; message: () => string };
 export function toHaveNoA11yViolations(
   received: Node | ScanResult | A11yScanResult,
   options: A11yMatcherOptions
 ): { pass: boolean; message: () => string };
+
+/**
+ * Sets what every toHaveNoA11yViolations() assertion uses unless it says
+ * otherwise, from a setup file. An assertion's own options override each one
+ * it gives. Called again, it replaces every default; null clears them.
+ */
+export function configureA11yMatchers(options: A11yGateOptions | null): void;
 
 export interface ToHaveAnnouncedOptions {
   /**
@@ -133,7 +157,11 @@ export function installListenerHook(win?: Window): void;
 export function installLiveRegionHook(win?: Window): void;
 
 interface A11yCustomMatchers<R = unknown> {
-  toHaveNoA11yViolations(engineOptions?: EngineOptions | StrictEngineOptions | null, runOnly?: A11yRunOnly | null): R;
+  toHaveNoA11yViolations(
+    engineOptions?: EngineOptions | StrictEngineOptions | null,
+    runOnly?: A11yRunOnly | null,
+    options?: A11yGateOptions | null
+  ): R;
   toHaveNoA11yViolations(options: A11yMatcherOptions): R;
   toHaveAnnounced(expected?: string | RegExp, options?: ToHaveAnnouncedOptions): R;
 }

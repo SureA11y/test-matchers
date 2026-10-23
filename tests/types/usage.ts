@@ -8,9 +8,11 @@ import {
   installListenerHook,
   installLiveRegionHook,
   toHaveAnnounced,
-  toHaveNoA11yViolations
+  toHaveNoA11yViolations,
+  configureA11yMatchers
 } from '../../src/index';
 import type {
+  A11yGateOptions,
   A11yMatcherOptions,
   A11yRunOnly,
   A11yScanResult,
@@ -50,6 +52,16 @@ const anyStatus = toHaveAnnounced(container, /saved/i, behindModal);
 const anything = toHaveAnnounced(document);
 const said: Announcement['politeness'] = 'polite';
 
+const serious: A11yGateOptions = { failOnSeverity: 'serious' };
+configureA11yMatchers(serious);
+configureA11yMatchers({ leanFail: true, wcagOnly: true, howToCheck: true });
+configureA11yMatchers(null);
+const gated = toHaveNoA11yViolations(container, null, null, { failOnSeverity: 'critical', leanFail: true });
+const ungated = toHaveNoA11yViolations(container, null, null, { failOnSeverity: null });
+const gatedForm = toHaveNoA11yViolations(container, { runOnly: wcag22, failOnSeverity: 'serious' });
+// @ts-expect-error not a severity
+configureA11yMatchers({ failOnSeverity: 'high' });
+
 const result: ScanResult = runDomRulesInPage(null, '#main', {}, null);
 const reused = toHaveNoA11yViolations(result);
 
@@ -64,7 +76,7 @@ const fromObject = toHaveNoA11yViolations(handBuilt);
 
 const passed: boolean =
   scoped.pass && whole.pass && withPack.pass && targeted.pass && byTag.pass && strictScan.pass && reused.pass && fromObject.pass &&
-  withLeans.pass && withSteps.pass && saved.pass && anyStatus.pass && anything.pass;
+  withLeans.pass && withSteps.pass && saved.pass && anyStatus.pass && anything.pass && gated.pass && ungated.pass && gatedForm.pass;
 const message: string = scoped.message();
 
 export { passed, message, said };

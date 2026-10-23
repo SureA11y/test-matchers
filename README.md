@@ -236,7 +236,7 @@ If `#main` matches nothing, `@surea11y/core` (1.10.0 and later) scans nothing an
 
 ## API
 
-### `toHaveNoA11yViolations(received, engineOptions?, runOnly?)`, or `(received, options)`
+### `toHaveNoA11yViolations(received, engineOptions?, runOnly?, options?)`, or `(received, options)`
 
 | Param | Type | Meaning |
 |---|---|---|
@@ -244,16 +244,19 @@ If `#main` matches nothing, `@surea11y/core` (1.10.0 and later) scans nothing an
 | `engineOptions` | `object` (optional) | Passed straight through to `@surea11y/core`'s scan — the same options object used everywhere else in the surea11y ecosystem. See [Filtering and configuring scans](#filtering-and-configuring-scans-engineoptions) below and the engine's own [`ENGINE_OPTIONS.md`](https://github.com/SureA11y/core/blob/main/docs/ENGINE_OPTIONS.md). Ignored when `received` is already a scan result. |
 | `runOnly` | `object`, `string` or `string[]` (optional) | Passed straight through as the scan's `runOnly`, `runDomRulesInPage`'s fourth argument: a WCAG target (`{ wcag: { version: '2.2', level: 'AA' } }`), `bestPractices`, rule ids or tags. See [Choosing a WCAG target](#choosing-a-wcag-target-runonly). Ignored when `received` is already a scan result. |
 
-The second argument can instead be one options object, `{ engineOptions?, runOnly?, leanFail?, wcagOnly?, howToCheck? }`:
+| `options` | `object` (optional) | `{ failOnSeverity?, leanFail?, wcagOnly?, howToCheck? }`, as in the table below; each overrides the default [`configureA11yMatchers()`](#configurea11ymatchersoptions) set. |
+
+The second argument can instead be one options object, `{ engineOptions?, runOnly?, failOnSeverity?, leanFail?, wcagOnly?, howToCheck? }`:
 
 | Option | Meaning |
 |---|---|
 | `engineOptions`, `runOnly` | As the two arguments above. |
+| `failOnSeverity` | `'critical'`, `'serious'`, `'moderate'` or `'minor'`: only findings of rules of that severity or above fail the assertion; the message still lists every failure. `null` turns a configured default off. See [Failing only on serious problems](#failing-only-on-serious-problems). |
 | `leanFail` | `true` also fails on the `cantTell` findings that lean fail (`@surea11y/core` 1.14.0 and later), as core's `leaningFailures()` lists them. See [Findings that need review](#findings-that-need-review-leans-and-how-to-check). Default `false`. |
 | `wcagOnly` | With `leanFail`: only those of rules mapped to a WCAG criterion, leaving the best practices out. |
 | `howToCheck` | `true` lists every question in the failure message in full, with the steps that answer it. |
 
-An object is read as this form when it has any of these keys, none of which is an engine option; one that mixes them with engine options (`{ leanFail: true, rules: ... }`), or a `runOnly` given beside it as a second argument, throws a `TypeError`. `(engineOptions, runOnly)` works as before.
+An object is read as this form when it has any of these keys, none of which is an engine option; one that mixes them with engine options (`{ leanFail: true, rules: ... }`), or a `runOnly` given beside it as a second argument, throws a `TypeError`. `(engineOptions, runOnly)` works as before, and takes the other options as a third argument (`(null, null, { failOnSeverity: 'serious' })`).
 
 ```js
 expect(container).toHaveNoA11yViolations({ leanFail: true });
@@ -266,7 +269,7 @@ expect(container).toHaveNoA11yViolations({
 
 Returns the `{ pass, message }` shape both Jest's and Vitest's `expect.extend()` expect — you never call this directly in a test; it's wired up once via `expect.extend()` as shown in [Setup](#setup).
 
-`pass` is `false` when any finding fails, or with `leanFail` leans fail, or when the scan left out what it was asked to check ([below](#scans-that-left-something-out)). Each finding is read by its own outcome (core's `occurrenceOutcome()`), not its rule's: a rule's findings can sit in different tiers, and a failing rule's questions are questions.
+`pass` is `false` when any finding fails (with `failOnSeverity`, any of a rule at that level or above), or with `leanFail` leans fail, or when the scan left out what it was asked to check ([below](#scans-that-left-something-out)). Each finding is read by its own outcome (core's `occurrenceOutcome()`), not its rule's: a rule's findings can sit in different tiers, and a failing rule's questions are questions.
 
 The scan itself can throw, and the test then fails with the engine's error, which carries a `code`:
 
@@ -277,6 +280,14 @@ The scan itself can throw, and the test then fails with the engine's error, whic
 ```js
 // Catch a misspelt option instead of scanning without it
 expect(container).toHaveNoA11yViolations({ strictOptions: true, locale: 'fr' });
+```
+
+### `configureA11yMatchers(options)`
+
+Sets what every `toHaveNoA11yViolations()` assertion uses unless it says otherwise, from your setup file: `{ failOnSeverity?, leanFail?, wcagOnly?, howToCheck? }`, the options in the table above. An assertion's own options override each one they give (`failOnSeverity: null` or `leanFail: false` turns that default off there). Called again, it replaces every default; `configureA11yMatchers(null)` clears them. An option it doesn't know, or a value that isn't one, throws a `TypeError`. `failOnSeverity` needs `@surea11y/binding-base` 1.6.0 (installed with this package).
+
+```js
+configureA11yMatchers({ failOnSeverity: 'serious', leanFail: true, wcagOnly: true });
 ```
 
 ### `toHaveAnnounced(received, expected?, options?)`
@@ -292,6 +303,27 @@ Passes when a live region was given `expected` while assistive technology could 
 ### `installInternalsHook(win?)`, `installListenerHook(win?)`, `installLiveRegionHook(win?)`
 
 Opt-in: each installs one of core's hooks in the test's jsdom window, recorded as early. Call them once in your setup file (see [Setup file with the hooks](#setup-file-with-the-hooks)), before any component is defined. `win` defaults to the global `window`; anything that isn't a jsdom window throws a `TypeError`. See [Web components](#web-components-names-set-through-elementinternals), [the listener hook](#click-handlers-added-from-script-the-listener-hook) and [the live-region hook](#live-regions-the-live-region-hook-and-tohaveannounced).
+
+## Failing only on serious problems
+
+Every rule result has a severity: `critical`, `serious`, `moderate` or `minor` (a profile can set its own). To start by failing tests on serious problems while the rest are still reported and fixed over time, set a level for the whole suite in your setup file:
+
+```js
+// jest.setup.js (vitest.setup.js: the same, with import)
+const { toHaveNoA11yViolations, configureA11yMatchers } = require('@surea11y/test-matchers');
+
+expect.extend({ toHaveNoA11yViolations });
+configureA11yMatchers({ failOnSeverity: 'serious' });
+```
+
+or for one assertion, in its options, which override the default (`failOnSeverity: null` turns it off there):
+
+```js
+expect(container).toHaveNoA11yViolations({ failOnSeverity: 'critical' });
+expect(container).toHaveNoA11yViolations(null, null, { failOnSeverity: 'critical' }); // the same, after engineOptions and runOnly
+```
+
+Only findings of failing rules at that level or above fail the assertion: the same failures `surea11y scan --fail-on-severity` counts. With `leanFail`, a likely failure counts only at that level or above too, and is otherwise listed with the questions. When it does fail, the message lists every failure and marks those below the level `(moderate, below failOnSeverity serious, does not fail the test)`. A passing assertion prints nothing, as Jest and Vitest do for every passing assertion. `fail` keeps its meaning, a definite violation; the level only picks which ones fail the test. Scan gaps (a scope that matched nothing, a custom rule or pack that didn't run) fail the assertion whatever the level.
 
 ## Filtering and configuring scans (`engineOptions`)
 
@@ -676,7 +708,7 @@ Questions, which only a person can answer: manual-review.
 With `@surea11y/core` 1.14.0, what a test through this matcher shows differently (core's [`CHANGELOG.md`](https://github.com/SureA11y/core/blob/main/CHANGELOG.md) has the full list):
 
 - **Questions lean, and say how to answer them.** A `cantTell` occurrence can carry a `lean` (which way the evidence points, and why) and carries `howToCheck` (the steps to answer it). The failure message lists the questions by review group, with their leans, where it used to list rule ids. [More](#findings-that-need-review-leans-and-how-to-check).
-- **`{ leanFail: true }`** also fails the test on the questions that lean fail, with `wcagOnly` to leave out the best practices. Without it, nothing changes: a question still doesn't fail a test. [More](#tohavenoa11yviolationsreceived-engineoptions-runonly-or-received-options).
+- **`{ leanFail: true }`** also fails the test on the questions that lean fail, with `wcagOnly` to leave out the best practices. Without it, nothing changes: a question still doesn't fail a test. [More](#tohavenoa11yviolationsreceived-engineoptions-runonly-options-or-received-options).
 - **Failures are counted by element.** The matcher reads each occurrence's own outcome, so a question of a failing rule is listed with the questions, and `found N` counts failing elements rather than failing rules.
 - **Two more opt-in hooks, and announcements.** `installListenerHook()` lets the keyboard rules see click handlers added from script, and `installLiveRegionHook()` records what live regions are given, which `toHaveAnnounced()` asserts on. [More](#setup-file-with-the-hooks).
 - **New checks.** `click-handler-keyboard-operable` (2.1.1, 2.1.3) fails an inline `onclick` on an element the keyboard can't reach, and asks about one that has no key handler; with the listener hook it also judges listeners added from script. `live-region-announcements` (4.1.3) asks about a live region assistive technology can't reach (`aria-hidden`, `inert`, behind a modal dialog) or left `aria-busy`. `control-name-title-only` (best practice) asks about a button or link named only by its `title`. `moving-content-pausable` (2.2.2) asks about content that moves by itself.
@@ -725,7 +757,7 @@ The matcher passes `engineOptions` and `runOnly` through to the engine, so these
 - **WCAG targets and best practices** can be chosen with `runOnly.wcag` and `runOnly.bestPractices`, the matcher's third argument ([above](#choosing-a-wcag-target-runonly)).
 - **`aria-hidden-focus` maps to 4.1.2 only**, no longer to 2.4.7 Focus Visible, so `{ tags: { include: 'wcag2aa' } }` alone no longer selects it.
 - **A custom rule counts toward its WCAG criterion.** A `customRules` rule with `meta.wcagSc` (or a WCAG `normativeMappings` entry) fails that criterion's rollup when it fails, and custom and pack rules run after core's, with read-only helpers.
-- **On/off options read as meant**: `{ includeShadowDom: 'false' }` is off, where it was on. `strictOptions: true` rejects any option the engine doesn't read, and a rule selection whose includes and excludes cancel out, which runs no rule, is warned about (see [the API](#tohavenoa11yviolationsreceived-engineoptions-runonly-or-received-options)).
+- **On/off options read as meant**: `{ includeShadowDom: 'false' }` is off, where it was on. `strictOptions: true` rejects any option the engine doesn't read, and a rule selection whose includes and excludes cancel out, which runs no rule, is warned about (see [the API](#tohavenoa11yviolationsreceived-engineoptions-runonly-options-or-received-options)).
 - **Under jsdom**, a font size given as a keyword (`xx-large`) or a `calc()` is read as a browser reads it, where the contrast rules read it as 0px; contrast still runs in `visibilityMode: 'styleOnly'`, since jsdom has no layout.
 
 
