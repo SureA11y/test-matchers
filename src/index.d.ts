@@ -60,6 +60,14 @@ export function toHaveNoA11yViolations(
  */
 export function installInternalsHook(win?: Window): void;
 
+/**
+ * Installs @surea11y/core's listener hook (core 1.14.0 and later) in the
+ * test's jsdom window, so the keyboard rules see the listeners the code under
+ * test adds from script. Call it in a setup file, before that code adds any.
+ * `win` defaults to the global `window`.
+ */
+export function installListenerHook(win?: Window): void;
+
 interface A11yCustomMatchers<R = unknown> {
   toHaveNoA11yViolations(engineOptions?: EngineOptions | StrictEngineOptions | null, runOnly?: A11yRunOnly | null): R;
 }

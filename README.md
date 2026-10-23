@@ -132,7 +132,7 @@ export default {
 
 The bundled `.d.ts` augments **both** Jest's global `jest.Matchers` interface and Vitest's `@vitest/expect` `Assertion`/`AsymmetricMatchersContaining` interfaces, with no `@types/jest` or `vitest` import required to ship it — whichever framework (or neither) is actually installed, only the matching augmentation takes effect; the other is simply inert. Nothing further to configure beyond making sure the setup file above is included in your `tsconfig`.
 
-`engineOptions` is typed with `@surea11y/core`'s own `EngineOptions` (or `StrictEngineOptions`, with `strictOptions: true`), `runOnly` with core's `RunOnly` and its other accepted forms (`A11yRunOnly`), and a precomputed result may be core's `ScanResult`; all are re-exported from this package (`import type { EngineOptions, RunOnly, ScanResult } from '@surea11y/test-matchers'`). `engineOptions.packs` takes the packs `definePack` from `@surea11y/core/pack` returns. A precomputed result's `skippedPacks` is typed on `A11yScanResult` beside `skippedCustomRules`. `installInternalsHook(win?)` is typed too.
+`engineOptions` is typed with `@surea11y/core`'s own `EngineOptions` (or `StrictEngineOptions`, with `strictOptions: true`), `runOnly` with core's `RunOnly` and its other accepted forms (`A11yRunOnly`), and a precomputed result may be core's `ScanResult`; all are re-exported from this package (`import type { EngineOptions, RunOnly, ScanResult } from '@surea11y/test-matchers'`). `engineOptions.packs` takes the packs `definePack` from `@surea11y/core/pack` returns. A precomputed result's `skippedPacks` is typed on `A11yScanResult` beside `skippedCustomRules`. `installInternalsHook(win?)` and `installListenerHook(win?)` are typed too.
 
 ## Usage
 
@@ -208,6 +208,10 @@ expect(container).toHaveNoA11yViolations({ strictOptions: true, locale: 'fr' });
 ### `installInternalsHook(win?)`
 
 Opt-in, for web components: installs core's internals hook in the test's jsdom window, so the scan reads names, states and roles that components set through a private `ElementInternals`. Call it once in your setup file, before any component is defined. `win` defaults to the global `window`. See [Web components](#web-components-names-set-through-elementinternals).
+
+### `installListenerHook(win?)`
+
+Opt-in, for code that adds its event listeners from script (`@surea11y/core` 1.14.0 and later): installs core's listener hook in the test's jsdom window, so the keyboard rules see the click, key, focus and mouse listeners the code under test adds with `addEventListener` or an `onclick`-style property. Call it once in your setup file, before that code adds any. `win` defaults to the global `window`. See [Listeners added from script](#listeners-added-from-script).
 
 ## Filtering and configuring scans (`engineOptions`)
 
@@ -427,6 +431,39 @@ Things to know:
 - **Jest's jsdom.** `jest-environment-jsdom` 30 ships jsdom 26, where a component that sets an ARIA property on its internals (`internals.ariaLabel = ...`) throws, hook or not. Vitest with jsdom 29 handles it. With Jest, the hook still lets the scan tell that a component which never attached internals has none.
 - **Vitest and `'late'`.** Under Vitest, `@surea11y/core` 1.12.0 records the hook as `'late'`, though it ran first, because Vitest defines the window's globals differently from a page. Names and states set through internals are still read; a component that never attached internals stays a question until core reads Vitest's window as it reads a page's.
 
+## Listeners added from script
+
+The keyboard rules read inline handlers (`onclick="…"`) from the markup. A component that adds its listeners from script leaves nothing a scan can read:
+
+```js
+const save = document.createElement('div');
+save.setAttribute('role', 'button');
+save.tabIndex = 0;
+save.addEventListener('click', onSave); // and no key listener: Enter and Space do nothing
+```
+
+By default the scan doesn't see the listener, so it doesn't report the element. `installListenerHook()` (`@surea11y/core` 1.14.0 and later) lets it see them. Call it in the setup file, beside `installInternalsHook()` if you use both:
+
+```js
+// jest.setup.js (vitest.setup.js: the same, with import)
+const {
+  toHaveNoA11yViolations,
+  installListenerHook
+} = require('@surea11y/test-matchers');
+
+installListenerHook();
+expect.extend({ toHaveNoA11yViolations });
+```
+
+With it, `click-handler-keyboard-operable` judges an element given a click listener from script as one with an inline `onclick`, and counts a key listener on the element or inside it: the button above fails (`CLICK_HANDLER_NO_KEY_LISTENER`), and passes once it listens for `keydown`. A key listener only on an ancestor, the document or the window is asked about, and `mouse-only-event-handlers` asks about pointer listeners added from script. A scan result's `engine.environment.listenerHook` says it worked.
+
+Things to know:
+
+- **Before the code under test adds listeners.** A listener added before the hook isn't in its record.
+- **jsdom's own listeners.** jsdom's selector engine adds `keydown` and `keyup` listeners to the window the first time a selector runs. `installListenerHook()` runs one selector before it installs the hook, so those aren't read as your code's.
+- **Vitest and `'late'`.** As with the internals hook, Vitest's window globals make core record the hook as `'late'`. Listeners the hook saw still count, so a button with its own key listener passes, but a missing one proves nothing there: the button above is asked about (`CLICK_HANDLER_NO_KEY_HANDLER`) rather than failed. Under Jest it fails.
+- **It changes the test window.** It wraps `addEventListener`, `removeEventListener` and the `on…` property setters (listeners themselves aren't wrapped, and run as before), and keeps a record under a global symbol. That's harmless in a test, and it's why the hook is opt-in.
+
 ## Failure messages
 
 When the assertion fails, the message lists every occurrence (not just every rule — one rule can flag several elements), with the rule ID, severity, a human-readable summary, the failing element's selector, and a fix hint where available. It names the `@surea11y/core` release that produced the result, to quote in a bug report:
@@ -478,6 +515,13 @@ Scanned with @surea11y/core 1.12.0.
 
 2 rule(s) need manual review (cantTell, not counted as failures): contrast-computable, manual-review
 ```
+
+## What changes with `@surea11y/core` 1.14
+
+What a scan through these matchers shows differently with `@surea11y/core` 1.14.0 (core's [`CHANGELOG.md`](https://github.com/SureA11y/core/blob/main/CHANGELOG.md) has the full list):
+
+- **Listeners added from script.** With [`installListenerHook()`](#listeners-added-from-script), `click-handler-keyboard-operable` judges a click listener added with `addEventListener` as an inline `onclick`, and fails a focusable control that no key listener can reach (`CLICK_HANDLER_NO_KEY_LISTENER`); `mouse-only-event-handlers` asks about pointer listeners added from script. Both rules' messages now say "click handler" rather than "onclick handler".
+- **Roles that depend on context.** `aria-allowed-attr` no longer fails `aria-expanded` on a text input whose `list` names a `<datalist>` (a combobox), and now judges `<td>`: `cell` in a table, `gridcell` in a grid. `label-in-name` checks a `<td>` in a grid. `heading-order` and `page-has-heading-one` count a heading marked `role="none"` that can take focus or has a global ARIA attribute, as browsers do.
 
 ## Upgrading to `@surea11y/core` 1.12
 
