@@ -3,7 +3,14 @@
 import { runDomRulesInPage } from '@surea11y/core';
 import type { ScanResult } from '@surea11y/core';
 import { definePack } from '@surea11y/core/pack';
-import { installInternalsHook, toHaveNoA11yViolations } from '../../src/index';
+import {
+  installInternalsHook,
+  installListenerHook,
+  installLiveRegionHook,
+  toHaveAnnounced,
+  toHaveNoA11yViolations,
+  configureA11yMatchers
+} from '../../src/index';
 import type { A11yRunOnly, A11yScanResult, EngineOptions, StrictEngineOptions } from '../../src/index';
 
 declare const container: HTMLElement;
@@ -22,6 +29,15 @@ const strictScan = toHaveNoA11yViolations(container, strict);
 
 installInternalsHook();
 installInternalsHook(window);
+installListenerHook();
+installListenerHook(window);
+installLiveRegionHook();
+installLiveRegionHook(window);
+const announced: boolean = toHaveAnnounced(document, /Saved/).pass;
+configureA11yMatchers({ failOnSeverity: 'serious' });
+configureA11yMatchers(null);
+const gated = toHaveNoA11yViolations(container, null, null, { failOnSeverity: 'critical' });
+const ungated = toHaveNoA11yViolations(container, null, null, { failOnSeverity: null });
 
 const result: ScanResult = runDomRulesInPage(null, '#main', {}, null);
 const reused = toHaveNoA11yViolations(result);

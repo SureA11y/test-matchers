@@ -132,7 +132,7 @@ export default {
 
 The bundled `.d.ts` augments **both** Jest's global `jest.Matchers` interface and Vitest's `@vitest/expect` `Assertion`/`AsymmetricMatchersContaining` interfaces, with no `@types/jest` or `vitest` import required to ship it — whichever framework (or neither) is actually installed, only the matching augmentation takes effect; the other is simply inert. Nothing further to configure beyond making sure the setup file above is included in your `tsconfig`.
 
-`engineOptions` is typed with `@surea11y/core`'s own `EngineOptions` (or `StrictEngineOptions`, with `strictOptions: true`), `runOnly` with core's `RunOnly` and its other accepted forms (`A11yRunOnly`), and a precomputed result may be core's `ScanResult`; all are re-exported from this package (`import type { EngineOptions, RunOnly, ScanResult } from '@surea11y/test-matchers'`). `engineOptions.packs` takes the packs `definePack` from `@surea11y/core/pack` returns. A precomputed result's `skippedPacks` is typed on `A11yScanResult` beside `skippedCustomRules`. `installInternalsHook(win?)` is typed too.
+`engineOptions` is typed with `@surea11y/core`'s own `EngineOptions` (or `StrictEngineOptions`, with `strictOptions: true`), `runOnly` with core's `RunOnly` and its other accepted forms (`A11yRunOnly`), and a precomputed result may be core's `ScanResult`; all are re-exported from this package (`import type { EngineOptions, RunOnly, ScanResult } from '@surea11y/test-matchers'`). `engineOptions.packs` takes the packs `definePack` from `@surea11y/core/pack` returns. A precomputed result's `skippedPacks` is typed on `A11yScanResult` beside `skippedCustomRules`. `installInternalsHook(win?)` and `installListenerHook(win?)` are typed too.
 
 ## Usage
 
@@ -182,7 +182,7 @@ If `#main` matches nothing, `@surea11y/core` (1.10.0 and later) scans nothing an
 
 ## API
 
-### `toHaveNoA11yViolations(received, engineOptions?, runOnly?)`
+### `toHaveNoA11yViolations(received, engineOptions?, runOnly?, options?)`
 
 | Param | Type | Meaning |
 |---|---|---|
@@ -205,9 +205,45 @@ The scan itself can throw, and the test then fails with the engine's error, whic
 expect(container).toHaveNoA11yViolations({ strictOptions: true, locale: 'fr' });
 ```
 
+### `configureA11yMatchers({ failOnSeverity })`
+
+Sets what every `toHaveNoA11yViolations()` assertion uses unless it says otherwise, from your setup file. `failOnSeverity` (`'critical'`, `'serious'`, `'moderate'` or `'minor'`) makes only failing rules of that severity or above fail the assertion. `configureA11yMatchers(null)` clears it. Needs `@surea11y/binding-base` 1.6.0 (installed with this package). See [Failing only on serious problems](#failing-only-on-serious-problems).
+
 ### `installInternalsHook(win?)`
 
 Opt-in, for web components: installs core's internals hook in the test's jsdom window, so the scan reads names, states and roles that components set through a private `ElementInternals`. Call it once in your setup file, before any component is defined. `win` defaults to the global `window`. See [Web components](#web-components-names-set-through-elementinternals).
+
+### `installListenerHook(win?)`
+
+Opt-in, for code that adds its event listeners from script (`@surea11y/core` 1.14.0 and later): installs core's listener hook in the test's jsdom window, so the keyboard rules see the click, key, focus and mouse listeners the code under test adds with `addEventListener` or an `onclick`-style property. Call it once in your setup file, before that code adds any. `win` defaults to the global `window`. See [Listeners added from script](#listeners-added-from-script).
+
+### `installLiveRegionHook(win?)`
+
+Opt-in, for status messages (`@surea11y/core` 1.14.0 and later): installs core's live-region hook in the test's jsdom window, which records what live regions are given, for `toHaveAnnounced()` and for `live-region-announcements`. Call it once in your setup file. `win` defaults to the global `window`. See [Status messages](#status-messages-tohaveannounced).
+
+### `toHaveAnnounced(expected)`
+
+`expect(container).toHaveAnnounced('Saved')` passes when a live region in `container` (an element, or `document` for the whole page) was given a text that contains `expected` (whitespace collapsed), or matches it when it's a `RegExp`, as the live-region hook recorded it. Without the hook it fails and says how to install it. See [Status messages](#status-messages-tohaveannounced).
+
+## Failing only on serious problems
+
+Every rule result has a severity: `critical`, `serious`, `moderate` or `minor` (a profile can set its own). To start by failing tests on serious problems while the rest are still reported and fixed over time, set a level for the whole suite in your setup file:
+
+```js
+// jest.setup.js (vitest.setup.js: the same, with import)
+const { toHaveNoA11yViolations, configureA11yMatchers } = require('@surea11y/test-matchers');
+
+expect.extend({ toHaveNoA11yViolations });
+configureA11yMatchers({ failOnSeverity: 'serious' });
+```
+
+or for one assertion, as the third argument after `engineOptions` and `runOnly`, which overrides the default (`failOnSeverity: null` turns it off there):
+
+```js
+expect(container).toHaveNoA11yViolations(null, null, { failOnSeverity: 'critical' });
+```
+
+Only failing rules at that level or above fail the assertion: the same failures `surea11y scan --fail-on-severity` counts. When it does fail, the message lists every failure and marks those below the level `(moderate, below failOnSeverity serious, does not fail the test)`. A passing assertion prints nothing, as Jest and Vitest do for every passing assertion. `fail` keeps its meaning, a definite violation; the level only picks which ones fail the test. Scan gaps (a scope that matched nothing, a custom rule or pack that didn't run) fail the assertion whatever the level.
 
 ## Filtering and configuring scans (`engineOptions`)
 
@@ -425,7 +461,70 @@ Things to know:
 - **Before any component is defined.** An element that attached its internals before the hook isn't in its record. The setup file runs before your test file imports any component, so call it there, not in a test.
 - **It changes the test window.** It wraps `HTMLElement.prototype.attachInternals` (the component gets the same internals back), and keeps a record under a global symbol. That's harmless in a test, and it's why the hook is opt-in.
 - **Jest's jsdom.** `jest-environment-jsdom` 30 ships jsdom 26, where a component that sets an ARIA property on its internals (`internals.ariaLabel = ...`) throws, hook or not. Vitest with jsdom 29 handles it. With Jest, the hook still lets the scan tell that a component which never attached internals has none.
-- **Vitest and `'late'`.** Under Vitest, `@surea11y/core` 1.12.0 records the hook as `'late'`, though it ran first, because Vitest defines the window's globals differently from a page. Names and states set through internals are still read; a component that never attached internals stays a question until core reads Vitest's window as it reads a page's.
+- **Vitest and `'late'`.** Before `@surea11y/core` 1.14.0, the engine records the hook as `'late'` under Vitest, though it ran first, because Vitest defines the window's globals differently from a page. Names and states set through internals are still read, but a component that never attached internals stays a question. From 1.14.0 the hook keeps what it needs in its own record, and Vitest gives `'early'`, as Jest does.
+
+## Listeners added from script
+
+The keyboard rules read inline handlers (`onclick="…"`) from the markup. A component that adds its listeners from script leaves nothing a scan can read:
+
+```js
+const save = document.createElement('div');
+save.setAttribute('role', 'button');
+save.tabIndex = 0;
+save.addEventListener('click', onSave); // and no key listener: Enter and Space do nothing
+```
+
+By default the scan doesn't see the listener, so it doesn't report the element. `installListenerHook()` (`@surea11y/core` 1.14.0 and later) lets it see them. Call it in the setup file, beside `installInternalsHook()` if you use both:
+
+```js
+// jest.setup.js (vitest.setup.js: the same, with import)
+const {
+  toHaveNoA11yViolations,
+  installListenerHook
+} = require('@surea11y/test-matchers');
+
+installListenerHook();
+expect.extend({ toHaveNoA11yViolations });
+```
+
+With it, `click-handler-keyboard-operable` judges an element given a click listener from script as one with an inline `onclick`, and counts a key listener on the element or inside it: the button above fails (`CLICK_HANDLER_NO_KEY_LISTENER`), and passes once it listens for `keydown`. A key listener only on an ancestor, the document or the window is asked about, and `mouse-only-event-handlers` asks about pointer listeners added from script. A scan result's `engine.environment.listenerHook` says it worked.
+
+Things to know:
+
+- **Before the code under test adds listeners.** A listener added before the hook isn't in its record.
+- **jsdom's own listeners.** jsdom's selector engine adds `keydown` and `keyup` listeners to the window the first time a selector runs. `installListenerHook()` runs one selector before it installs the hook, so those aren't read as your code's.
+- **Vitest.** The hook is recorded as `'early'` under Vitest too, so the button above fails there as it does under Jest.
+- **It changes the test window.** It wraps `addEventListener`, `removeEventListener` and the `on…` property setters (listeners themselves aren't wrapped, and run as before), and keeps a record under a global symbol. That's harmless in a test, and it's why the hook is opt-in.
+
+## Status messages: `toHaveAnnounced()`
+
+A status message ("Saved", "3 results") reaches a screen reader when a live region's content changes while the screen reader can reach it (WCAG 4.1.3). `toHaveAnnounced()` checks that your code made one available, with `installLiveRegionHook()` (`@surea11y/core` 1.14.0 and later) in the setup file:
+
+```js
+// jest.setup.js (vitest.setup.js: the same, with import)
+const {
+  toHaveNoA11yViolations,
+  toHaveAnnounced,
+  installLiveRegionHook
+} = require('@surea11y/test-matchers');
+
+installLiveRegionHook();
+expect.extend({ toHaveNoA11yViolations, toHaveAnnounced });
+```
+
+```js
+test('saving says so', async () => {
+  const { container } = render(<Editor />);
+  await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+  expect(container).toHaveAnnounced('Saved');
+});
+```
+
+Things to know:
+
+- **What it checks.** The text a shown live region, reachable by assistive technology, was given: what your code made available to announce. Not what a screen reader said, which depends on the screen reader.
+- **Put the region in the page before its text.** A live region rendered with its text already in it, or shown and filled at once, is commonly not announced, so it doesn't count: the toast above passes only if the empty region was on the page before the click. `live-region-announcements` asks about such a region (`LIVE_REGION_INSERTED_WITH_CONTENT`, `LIVE_REGION_SHOWN_AND_FILLED`), and so does `toHaveNoA11yViolations()`'s scan, which lists it under manual review. `role="alert"` is the exception: an alert rendered with its text counts.
+- **The record lasts as long as the window.** Under Jest and Vitest each test file gets a fresh window; within a file, earlier tests' messages are still there, so look in the `container` of the test at hand, or assert on a text only that test produces.
 
 ## Failure messages
 
@@ -478,6 +577,14 @@ Scanned with @surea11y/core 1.12.0.
 
 2 rule(s) need manual review (cantTell, not counted as failures): contrast-computable, manual-review
 ```
+
+## What changes with `@surea11y/core` 1.14
+
+What a scan through these matchers shows differently with `@surea11y/core` 1.14.0 (core's [`CHANGELOG.md`](https://github.com/SureA11y/core/blob/main/CHANGELOG.md) has the full list):
+
+- **Listeners added from script.** With [`installListenerHook()`](#listeners-added-from-script), `click-handler-keyboard-operable` judges a click listener added with `addEventListener` as an inline `onclick`, and fails a focusable control that no key listener can reach (`CLICK_HANDLER_NO_KEY_LISTENER`); `mouse-only-event-handlers` asks about pointer listeners added from script. Both rules' messages now say "click handler" rather than "onclick handler".
+- **Status messages.** `live-region-announcements` (4.1.3) asks about a live region hidden with `aria-hidden` or `inert`, or left `aria-busy`. With [`installLiveRegionHook()`](#status-messages-tohaveannounced) it also asks about one rendered with its text or shown and filled at once, and `toHaveAnnounced()` checks what your code made available to announce.
+- **Roles that depend on context.** `aria-allowed-attr` no longer fails `aria-expanded` on a text input whose `list` names a `<datalist>` (a combobox), and now judges `<td>`: `cell` in a table, `gridcell` in a grid. `label-in-name` checks a `<td>` in a grid. `heading-order` and `page-has-heading-one` count a heading marked `role="none"` that can take focus or has a global ARIA attribute, as browsers do.
 
 ## Upgrading to `@surea11y/core` 1.12
 

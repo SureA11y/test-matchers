@@ -49,8 +49,28 @@ export interface A11yScanResult {
 export function toHaveNoA11yViolations(
   received: Node | ScanResult | A11yScanResult,
   engineOptions?: EngineOptions | StrictEngineOptions | null,
-  runOnly?: A11yRunOnly | null
+  runOnly?: A11yRunOnly | null,
+  options?: A11yMatcherOptions | null
 ): { pass: boolean; message: () => string };
+
+/** A rule result's severity, least to most severe. */
+export type A11ySeverity = 'minor' | 'moderate' | 'serious' | 'critical';
+
+export interface A11yMatcherOptions {
+  /**
+   * Only failing rules of this severity or above fail the assertion, as
+   * `surea11y scan --fail-on-severity` counts them; the message still lists
+   * every failure, marking those below the level. null turns a configured
+   * default off for one assertion. Needs @surea11y/binding-base 1.6.0.
+   */
+  failOnSeverity?: A11ySeverity | null;
+}
+
+/**
+ * Sets what every toHaveNoA11yViolations() assertion uses by default, from a
+ * setup file. An assertion's own options override it. null clears it.
+ */
+export function configureA11yMatchers(options: A11yMatcherOptions | null): void;
 
 /**
  * Installs @surea11y/core's internals hook in the test's jsdom window, so a
@@ -60,8 +80,41 @@ export function toHaveNoA11yViolations(
  */
 export function installInternalsHook(win?: Window): void;
 
+/**
+ * Installs @surea11y/core's listener hook (core 1.14.0 and later) in the
+ * test's jsdom window, so the keyboard rules see the listeners the code under
+ * test adds from script. Call it in a setup file, before that code adds any.
+ * `win` defaults to the global `window`.
+ */
+export function installListenerHook(win?: Window): void;
+
+/**
+ * Installs @surea11y/core's live-region hook (core 1.14.0 and later) in the
+ * test's jsdom window, which records what live regions are given, for
+ * toHaveAnnounced(). Call it in a setup file. `win` defaults to the global
+ * `window`.
+ */
+export function installLiveRegionHook(win?: Window): void;
+
+/**
+ * Passes when a live region in `received` (an element, or a document for the
+ * whole page) was given a text that contains `expected` (whitespace
+ * collapsed) or matches it, as the live-region hook recorded it: what the
+ * page made available to announce, not what a screen reader said. Fails,
+ * saying so, without the hook.
+ */
+export function toHaveAnnounced(
+  received: Node,
+  expected: string | RegExp
+): { pass: boolean; message: () => string };
+
 interface A11yCustomMatchers<R = unknown> {
-  toHaveNoA11yViolations(engineOptions?: EngineOptions | StrictEngineOptions | null, runOnly?: A11yRunOnly | null): R;
+  toHaveNoA11yViolations(
+    engineOptions?: EngineOptions | StrictEngineOptions | null,
+    runOnly?: A11yRunOnly | null,
+    options?: A11yMatcherOptions | null
+  ): R;
+  toHaveAnnounced(expected: string | RegExp): R;
 }
 
 declare global {
