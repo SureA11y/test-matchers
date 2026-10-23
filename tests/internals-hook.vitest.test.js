@@ -7,6 +7,7 @@
 import { test, expect, beforeEach } from 'vitest';
 import { toHaveNoA11yViolations, installInternalsHook } from '../src/index.js';
 import { scanElement } from '../src/scan-element.js';
+import core from '@surea11y/core';
 
 installInternalsHook();
 expect.extend({ toHaveNoA11yViolations });
@@ -47,8 +48,10 @@ test('a component that names itself through private internals passes', () => {
   const outcome = (id) => result.checksResults.find((r) => r.ruleId === id).outcome;
   expect(outcome('binary-control-name-present')).toBe('pass');
   expect(outcome('aria-required-attr')).toBe('pass');
-  // 'early' once core reads Vitest's globals as a page's; see the README.
-  expect(['early', 'late']).toContain(result.engine.environment.internalsHook);
+  // Core 1.14.0, the release with the listener hook, records the hook as
+  // 'early' under Vitest; earlier releases record it as 'late' (see the README).
+  const early = typeof core.listenerHookScript === 'function';
+  expect(result.engine.environment.internalsHook).toBe(early ? 'early' : 'late');
 });
 
 test('a component that is a switch only through its internals is checked as one, and fails without a name', () => {

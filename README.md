@@ -429,7 +429,7 @@ Things to know:
 - **Before any component is defined.** An element that attached its internals before the hook isn't in its record. The setup file runs before your test file imports any component, so call it there, not in a test.
 - **It changes the test window.** It wraps `HTMLElement.prototype.attachInternals` (the component gets the same internals back), and keeps a record under a global symbol. That's harmless in a test, and it's why the hook is opt-in.
 - **Jest's jsdom.** `jest-environment-jsdom` 30 ships jsdom 26, where a component that sets an ARIA property on its internals (`internals.ariaLabel = ...`) throws, hook or not. Vitest with jsdom 29 handles it. With Jest, the hook still lets the scan tell that a component which never attached internals has none.
-- **Vitest and `'late'`.** Under Vitest, `@surea11y/core` 1.12.0 records the hook as `'late'`, though it ran first, because Vitest defines the window's globals differently from a page. Names and states set through internals are still read; a component that never attached internals stays a question until core reads Vitest's window as it reads a page's.
+- **Vitest and `'late'`.** Before `@surea11y/core` 1.14.0, the engine records the hook as `'late'` under Vitest, though it ran first, because Vitest defines the window's globals differently from a page. Names and states set through internals are still read, but a component that never attached internals stays a question. From 1.14.0 the hook keeps what it needs in its own record, and Vitest gives `'early'`, as Jest does.
 
 ## Listeners added from script
 
@@ -461,7 +461,7 @@ Things to know:
 
 - **Before the code under test adds listeners.** A listener added before the hook isn't in its record.
 - **jsdom's own listeners.** jsdom's selector engine adds `keydown` and `keyup` listeners to the window the first time a selector runs. `installListenerHook()` runs one selector before it installs the hook, so those aren't read as your code's.
-- **Vitest and `'late'`.** As with the internals hook, Vitest's window globals make core record the hook as `'late'`. Listeners the hook saw still count, so a button with its own key listener passes, but a missing one proves nothing there: the button above is asked about (`CLICK_HANDLER_NO_KEY_HANDLER`) rather than failed. Under Jest it fails.
+- **Vitest.** The hook is recorded as `'early'` under Vitest too, so the button above fails there as it does under Jest.
 - **It changes the test window.** It wraps `addEventListener`, `removeEventListener` and the `on…` property setters (listeners themselves aren't wrapped, and run as before), and keeps a record under a global symbol. That's harmless in a test, and it's why the hook is opt-in.
 
 ## Failure messages
