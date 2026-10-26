@@ -47,8 +47,15 @@ test('a component that names itself through private internals passes', () => {
   const outcome = (id) => result.checksResults.find((r) => r.ruleId === id).outcome;
   expect(outcome('binary-control-name-present')).toBe('pass');
   expect(outcome('aria-required-attr')).toBe('pass');
-  // 'early' once core reads Vitest's globals as a page's; see the README.
-  expect(['early', 'late']).toContain(result.engine.environment.internalsHook);
+  expect(result.engine.environment.internalsHook).toBe('early');
+});
+
+test('a custom element that never attached internals is no internals question', () => {
+  customElements.define('x-plain-button', class extends HTMLElement {});
+  document.body.innerHTML = '<main><h1>Hi</h1><x-plain-button role="button"></x-plain-button></main>';
+  const result = scanElement(document.body);
+  const reasons = result.checksResults.flatMap((r) => r.occurrences.map((o) => o.data && o.data.details && o.data.details.reasonCode));
+  expect(reasons).not.toContain('name_internals');
 });
 
 test('a component that is a switch only through its internals is checked as one, and fails without a name', () => {

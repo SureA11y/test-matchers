@@ -7,7 +7,8 @@
 // in tests/matcher.test.js and tests/scan-element.test.js under Jest -- this
 // file isn't meant to duplicate that, only to exercise the Jest/Vitest
 // integration seam itself: registration, .not, engineOptions and runOnly
-// passthrough, packs, precomputed-result assertions, and the thrown-error path.
+// passthrough, the options form, packs, precomputed-result assertions, and
+// the thrown-error path.
 
 import { test, expect, beforeEach, vi } from 'vitest';
 import { definePack } from '@surea11y/core/pack';
@@ -95,7 +96,17 @@ test("a pack's rule fails the assertion through its profile", () => {
 });
 
 test('runOnly is passed through as the second argument', () => {
-  document.body.innerHTML = '<main><h1>Hi</h1><div id="a"></div><div id="a"></div></main>';
-  expect(document).not.toHaveNoA11yViolations({}, { wcag: { version: '2.1', level: 'A' } });
+  document.body.innerHTML = '<main><h1>Title</h1><h2></h2></main>';
+  expect(document).not.toHaveNoA11yViolations({}, { bestPractices: true });
   expect(document).toHaveNoA11yViolations({}, { wcag: { version: '2.2', level: 'AA' } });
+});
+
+test('the options form takes leanFail, and the message lists the questions with their leans', () => {
+  document.body.innerHTML = '<main><h1>Title</h1><h3>Details</h3></main>';
+  expect(document.body).toHaveNoA11yViolations();
+  expect(document.body).not.toHaveNoA11yViolations({ leanFail: true });
+  expect(document.body).toHaveNoA11yViolations({ leanFail: true, wcagOnly: true });
+
+  document.body.insertAdjacentHTML('beforeend', '<img src="x.png">');
+  expect(() => expect(document.body).toHaveNoA11yViolations()).toThrow(/manual review[\s\S]*heading-order \(minor, likely fails\)[\s\S]*Why it likely fails: /);
 });

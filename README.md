@@ -56,7 +56,7 @@ If you write component tests with Jest or Vitest, this is the one to start with:
 Registration is the usual one: `expect.extend()` once in a setup file, then assert on a rendered container. What may differ from what you know:
 
 - **No `await` and no separate scan call.** Pass the container itself; the matcher scans it, synchronously.
-- **Only proven violations fail the test.** Findings that need a person to judge (is this alt text *meaningful*?) are reported as `cantTell` and listed in the message, but never fail a test on their own. See [Why](#why).
+- **Only proven violations fail the test.** Findings that need a person to judge (is this alt text *meaningful*?) are reported as `cantTell` and listed in the message, but don't fail a test on their own unless you ask for it with `leanFail`. See [Why](#why).
 - **A scan that checked nothing fails.** A detached element, or a custom rule or pack that did not run, fails the assertion instead of passing on nothing. See [Scans that left something out](#scans-that-left-something-out).
 - **Rule ids, tags and options are surea11y's.** See [Filtering and configuring scans](#filtering-and-configuring-scans-engineoptions).
 
@@ -64,7 +64,7 @@ The matcher itself has no framework-specific code — `toHaveNoA11yViolations()`
 
 ## Why
 
-surea11y is built around a conservative philosophy: **never report a violation unless it can be proven**. Each rule makes one deterministic decision — `fail` when a violation is objectively certain, `cantTell` when it requires human judgement (e.g. whether alt text is *meaningful*, not just present). This matcher keeps that same contract: `fail` outcomes gate the assertion, and `cantTell` findings are surfaced for visibility but never break a passing test. A scan that could not check what it was asked to (an element not in the document, a custom rule or a pack that did not run) fails too, rather than passing on nothing. See ["What it checks and doesn't"](#what-it-checks-and-doesnt) below.
+surea11y is built around a conservative philosophy: **never report a violation unless it can be proven**. Each rule makes one deterministic decision — `fail` when a violation is objectively certain, `cantTell` when it requires human judgement (e.g. whether alt text is *meaningful*, not just present). This matcher keeps that same contract: failures gate the assertion, and `cantTell` findings are surfaced for visibility but don't break a passing test. With `@surea11y/core` 1.14, a `cantTell` can lean one way; `{ leanFail: true }` also fails the test on the ones that likely fail, when you choose to (see [Findings that need review](#findings-that-need-review-leans-and-how-to-check)). A scan that could not check what it was asked to (an element not in the document, a custom rule or a pack that did not run) fails too, rather than passing on nothing. See ["What it checks and doesn't"](#what-it-checks-and-doesnt) below.
 
 ## Requirements
 
@@ -79,7 +79,7 @@ Your test environment must be jsdom-based — this matcher scans whatever `docum
 npm install --save-dev @surea11y/core @surea11y/test-matchers
 ```
 
-`@surea11y/core` 1.12.0 or later, the engine, comes with this package as a regular dependency, so a project that doesn't list it still works. Listing it yourself, as the line above does, gives your tests and anything else in your project that uses core one shared copy.
+`@surea11y/core` 1.14.0 or later, the engine, comes with this package as a regular dependency, so a project that doesn't list it still works. Listing it yourself, as the line above does, gives your tests and anything else in your project that uses core one shared copy.
 
 **Coming in 2.0:** core becomes a peer dependency, so this package will no longer install it for you. Add `@surea11y/core` to your `package.json` now and 2.0 needs no change.
 
@@ -128,11 +128,65 @@ export default {
 </td></tr>
 </table>
 
+### Setup file with the hooks
+
+`@surea11y/core` has three opt-in hooks a scan can read more with, each installed in the test window before the code under test runs: the [internals hook](#web-components-names-set-through-elementinternals) (web components' private `ElementInternals`), the [listener hook](#click-handlers-added-from-script-the-listener-hook) (listeners added from script) and the [live-region hook](#live-regions-the-live-region-hook-and-tohaveannounced) (what live regions are given, which `toHaveAnnounced()` reads). The setup file is the place, as it runs before your test file imports any component:
+
+<table>
+<tr><th>Jest</th><th>Vitest</th></tr>
+<tr valign="top"><td>
+
+```js
+// jest.setup.js
+const {
+  toHaveNoA11yViolations,
+  toHaveAnnounced,
+  installInternalsHook,
+  installListenerHook,
+  installLiveRegionHook
+} = require('@surea11y/test-matchers');
+
+installInternalsHook();
+installListenerHook();
+installLiveRegionHook();
+expect.extend({
+  toHaveNoA11yViolations,
+  toHaveAnnounced
+});
+```
+
+</td><td>
+
+```js
+// vitest.setup.js
+import { expect } from 'vitest';
+import {
+  toHaveNoA11yViolations,
+  toHaveAnnounced,
+  installInternalsHook,
+  installListenerHook,
+  installLiveRegionHook
+} from '@surea11y/test-matchers';
+
+installInternalsHook();
+installListenerHook();
+installLiveRegionHook();
+expect.extend({
+  toHaveNoA11yViolations,
+  toHaveAnnounced
+});
+```
+
+</td></tr>
+</table>
+
+Install only the ones you want; each is independent. Each one records itself as early (`engine.environment.internalsHook`, `.listenerHook`, `.liveRegionHook` in a scan result is `'early'`): a setup file runs after jsdom has loaded the document but before any of your code, which is what early means. Each test file gets a window of its own, and the setup file runs in each. They work the same under Jest's jsdom and Vitest's.
+
 ### TypeScript
 
 The bundled `.d.ts` augments **both** Jest's global `jest.Matchers` interface and Vitest's `@vitest/expect` `Assertion`/`AsymmetricMatchersContaining` interfaces, with no `@types/jest` or `vitest` import required to ship it — whichever framework (or neither) is actually installed, only the matching augmentation takes effect; the other is simply inert. Nothing further to configure beyond making sure the setup file above is included in your `tsconfig`.
 
-`engineOptions` is typed with `@surea11y/core`'s own `EngineOptions` (or `StrictEngineOptions`, with `strictOptions: true`), `runOnly` with core's `RunOnly` and its other accepted forms (`A11yRunOnly`), and a precomputed result may be core's `ScanResult`; all are re-exported from this package (`import type { EngineOptions, RunOnly, ScanResult } from '@surea11y/test-matchers'`). `engineOptions.packs` takes the packs `definePack` from `@surea11y/core/pack` returns. A precomputed result's `skippedPacks` is typed on `A11yScanResult` beside `skippedCustomRules`. `installInternalsHook(win?)` is typed too.
+`engineOptions` is typed with `@surea11y/core`'s own `EngineOptions` (or `StrictEngineOptions`, with `strictOptions: true`), `runOnly` with core's `RunOnly` and its other accepted forms (`A11yRunOnly`), and a precomputed result may be core's `ScanResult`; all are re-exported from this package (`import type { EngineOptions, RunOnly, ScanResult } from '@surea11y/test-matchers'`). `engineOptions.packs` takes the packs `definePack` from `@surea11y/core/pack` returns. A precomputed result's `skippedPacks` is typed on `A11yScanResult` beside `skippedCustomRules`. `installInternalsHook(win?)`, `installListenerHook(win?)` and `installLiveRegionHook(win?)` are typed too, and so are the options form (`A11yMatcherOptions`) and `toHaveAnnounced(expected?, options?)` (`ToHaveAnnouncedOptions`; core's `Announcement` is re-exported) on both frameworks' `expect`.
 
 ## Usage
 
@@ -182,7 +236,7 @@ If `#main` matches nothing, `@surea11y/core` (1.10.0 and later) scans nothing an
 
 ## API
 
-### `toHaveNoA11yViolations(received, engineOptions?, runOnly?)`
+### `toHaveNoA11yViolations(received, engineOptions?, runOnly?)`, or `(received, options)`
 
 | Param | Type | Meaning |
 |---|---|---|
@@ -190,9 +244,29 @@ If `#main` matches nothing, `@surea11y/core` (1.10.0 and later) scans nothing an
 | `engineOptions` | `object` (optional) | Passed straight through to `@surea11y/core`'s scan — the same options object used everywhere else in the surea11y ecosystem. See [Filtering and configuring scans](#filtering-and-configuring-scans-engineoptions) below and the engine's own [`ENGINE_OPTIONS.md`](https://github.com/SureA11y/core/blob/main/docs/ENGINE_OPTIONS.md). Ignored when `received` is already a scan result. |
 | `runOnly` | `object`, `string` or `string[]` (optional) | Passed straight through as the scan's `runOnly`, `runDomRulesInPage`'s fourth argument: a WCAG target (`{ wcag: { version: '2.2', level: 'AA' } }`), `bestPractices`, rule ids or tags. See [Choosing a WCAG target](#choosing-a-wcag-target-runonly). Ignored when `received` is already a scan result. |
 
+The second argument can instead be one options object, `{ engineOptions?, runOnly?, leanFail?, wcagOnly?, howToCheck? }`:
+
+| Option | Meaning |
+|---|---|
+| `engineOptions`, `runOnly` | As the two arguments above. |
+| `leanFail` | `true` also fails on the `cantTell` findings that lean fail (`@surea11y/core` 1.14.0 and later), as core's `leaningFailures()` lists them. See [Findings that need review](#findings-that-need-review-leans-and-how-to-check). Default `false`. |
+| `wcagOnly` | With `leanFail`: only those of rules mapped to a WCAG criterion, leaving the best practices out. |
+| `howToCheck` | `true` lists every question in the failure message in full, with the steps that answer it. |
+
+An object is read as this form when it has any of these keys, none of which is an engine option; one that mixes them with engine options (`{ leanFail: true, rules: ... }`), or a `runOnly` given beside it as a second argument, throws a `TypeError`. `(engineOptions, runOnly)` works as before.
+
+```js
+expect(container).toHaveNoA11yViolations({ leanFail: true });
+expect(container).toHaveNoA11yViolations({
+  runOnly: { wcag: { version: '2.2', level: 'AA' } },
+  leanFail: true,
+  wcagOnly: true
+});
+```
+
 Returns the `{ pass, message }` shape both Jest's and Vitest's `expect.extend()` expect — you never call this directly in a test; it's wired up once via `expect.extend()` as shown in [Setup](#setup).
 
-`pass` is `false` when any rule reports `fail`, or when the scan left out what it was asked to check ([below](#scans-that-left-something-out)).
+`pass` is `false` when any finding fails, or with `leanFail` leans fail, or when the scan left out what it was asked to check ([below](#scans-that-left-something-out)). Each finding is read by its own outcome (core's `occurrenceOutcome()`), not its rule's: a rule's findings can sit in different tiers, and a failing rule's questions are questions.
 
 The scan itself can throw, and the test then fails with the engine's error, which carries a `code`:
 
@@ -205,9 +279,19 @@ The scan itself can throw, and the test then fails with the engine's error, whic
 expect(container).toHaveNoA11yViolations({ strictOptions: true, locale: 'fr' });
 ```
 
-### `installInternalsHook(win?)`
+### `toHaveAnnounced(received, expected?, options?)`
 
-Opt-in, for web components: installs core's internals hook in the test's jsdom window, so the scan reads names, states and roles that components set through a private `ElementInternals`. Call it once in your setup file, before any component is defined. `win` defaults to the global `window`. See [Web components](#web-components-names-set-through-elementinternals).
+Passes when a live region was given `expected` while assistive technology could reach it, as core's live-region hook recorded it. Needs [`installLiveRegionHook()`](#live-regions-the-live-region-hook-and-tohaveannounced) in the setup file, and throws without it.
+
+| Param | Type | Meaning |
+|---|---|---|
+| `received` | `Window`, `Document` or `Element` | Where to look. On a window or a document, every announcement in the page counts; on an element (a rendered `container`), only those of the live regions it is or contains. |
+| `expected` | `string` or `RegExp` (optional) | A string must be the whole text, whitespace collapsed; a RegExp may match part of it. Left out, any announcement passes, and `.not.toHaveAnnounced()` asserts that nothing was announced. |
+| `options.includeBehindModal` | `boolean` (optional) | Also count a text given to a region behind an open modal dialog, which assistive technology did not get. Default `false`. |
+
+### `installInternalsHook(win?)`, `installListenerHook(win?)`, `installLiveRegionHook(win?)`
+
+Opt-in: each installs one of core's hooks in the test's jsdom window, recorded as early. Call them once in your setup file (see [Setup file with the hooks](#setup-file-with-the-hooks)), before any component is defined. `win` defaults to the global `window`; anything that isn't a jsdom window throws a `TypeError`. See [Web components](#web-components-names-set-through-elementinternals), [the listener hook](#click-handlers-added-from-script-the-listener-hook) and [the live-region hook](#live-regions-the-live-region-hook-and-tohaveannounced).
 
 ## Filtering and configuring scans (`engineOptions`)
 
@@ -299,7 +383,7 @@ A pack's own rules appear in the result like core's, with ids that start with it
 
 ## What it checks and doesn't
 
-`fail` outcomes gate the assertion — matching every other surea11y binding's convention that `cantTell` results are advisory (need human review), not failures. If a scan produces `cantTell` results, they're still surfaced in the failure message when the assertion *does* fail for other reasons, but they never cause a passing test to fail on their own:
+Failures gate the assertion — matching every other surea11y binding's convention that `cantTell` results are advisory (need human review), not failures. If a scan produces `cantTell` results, they're still surfaced in the failure message when the assertion *does* fail for other reasons, but they don't cause a passing test to fail on their own (unless you pass `{ leanFail: true }`, [below](#findings-that-need-review-leans-and-how-to-check)):
 
 ```js
 test('cantTell rules do not fail a passing test', () => {
@@ -367,6 +451,47 @@ document.title = 'Test Page';
 document.documentElement.setAttribute('lang', 'en');
 ```
 
+## Findings that need review: leans and how to check
+
+A `cantTell` is a question for a person: the engine couldn't prove the answer from the page. With `@surea11y/core` 1.14, a question says more:
+
+- **Which way it leans.** Where the page's evidence points one way, the occurrence has a `lean`: `toward` (`'fail'` or `'pass'`), `why`, and sometimes a `caution` saying what could make it wrong. A skipped heading level leans fail; a duplicate id under a WCAG 2.1 target, which the 2023 errata count as meeting 4.1.1, leans pass. A lean counted against the W3C ACT test cases on five cases or more also says how often it was right (`measured`). The outcome stays `cantTell` either way. See core's [`LEANS.md`](https://github.com/SureA11y/core/blob/main/docs/LEANS.md).
+- **How to check it.** Each question of a core rule carries `howToCheck`: `steps` starting from the element it names, and what a person sees if it passes (`passWhen`) or fails (`failWhen`), in the scan's locale. The matcher's scan (`runDomRulesInPage`) adds them, with the steps of your packs' rules too.
+
+A failure message lists the questions after the failures, by review group: those that likely fail, then those that likely pass, each with its lean, then the open ones, which only a person can answer, by rule ([Failure messages](#failure-messages) shows one). `{ howToCheck: true }` lists every question in full, with its steps:
+
+```
+1) heading-order (minor, likely fails): This heading jumps from level 1 to level 3, skipping a level.
+   at body > main > h3
+   Go down one level at a time, so an <h2> is followed by an <h3> rather than an <h4>, and the outline of the page stays easy to follow.
+   Why it likely fails: The heading skips a level after the one before it.
+   How to check:
+     1. Find the heading the report names and note its level and the previous heading's level (from the report or the Accessibility pane).
+     ...
+```
+
+**Failing on likely failures.** By default a question never fails the test. `{ leanFail: true }` also fails it on the questions that lean fail, as core's `leaningFailures(result)` lists them: it leaves out the rules whose WCAG criteria are all outside the scan's target, and with `wcagOnly: true` the best-practice rules too. The failures and likely failures are counted apart in the message:
+
+```js
+test('the settings page has no failures or likely failures', () => {
+  const { container } = render(<Settings />); // an <h1>, then an <h3>
+  expect(container).toHaveNoA11yViolations(); // passes: heading-order is a question
+  expect(container).toHaveNoA11yViolations({ leanFail: true }); // fails: it leans fail
+  expect(container).toHaveNoA11yViolations({ leanFail: true, wcagOnly: true }); // passes: heading-order is a best practice
+});
+```
+
+```
+expected no accessibility violations or likely failures, but found 1 likely failure:
+
+1) heading-order (minor, likely fails): This heading jumps from level 1 to level 3, skipping a level.
+   ...
+```
+
+It's opt-in because a lean is evidence, not proof: whether a finding leans, which way, and its texts may change in a minor release of core. It's the same gate as core's reporters' `leanFailAs` (`renderJunitReport(result, { leanFailAs: 'failure' })`, `renderSarifReport(result, { leanFailAs: 'error' })`), so a test and a CI report built from the same result agree.
+
+**Each finding by its own outcome.** A rule's findings can sit in different tiers (core's `occurrenceOutcome()`): a rule that fails one element can ask about another. The matcher counts the failures one by one and lists that rule's questions with the questions, so `found 1` is one failing element, and a question of a failing rule doesn't count as a failure.
+
 ## Web components: names set through `ElementInternals`
 
 Many web components keep their `ElementInternals` in a private field and name themselves, set their states or give themselves a role through it:
@@ -418,40 +543,105 @@ expect.extend({ toHaveNoA11yViolations });
 </td></tr>
 </table>
 
-With it, the checkbox above passes: the scan reads its name and its `aria-checked`. A component that attaches internals but sets no name fails like any unnamed control, and a component that is a `switch` only through its internals (`this.#internals.role = 'switch'`) is checked as one, so it fails without a name. To see it worked, look at a scan result's `engine.environment.internalsHook`, which is `'early'` (or `'late'`, see below) once the hook is installed, and absent without it.
+With it, the checkbox above passes: the scan reads its name and its `aria-checked`. A component that attaches internals but sets no name fails like any unnamed control, and a component that is a `switch` only through its internals (`this.#internals.role = 'switch'`) is checked as one, so it fails without a name. To see it worked, look at a scan result's `engine.environment.internalsHook`, which is `'early'` once the hook is installed, and absent without it.
 
 Things to know:
 
 - **Before any component is defined.** An element that attached its internals before the hook isn't in its record. The setup file runs before your test file imports any component, so call it there, not in a test.
 - **It changes the test window.** It wraps `HTMLElement.prototype.attachInternals` (the component gets the same internals back), and keeps a record under a global symbol. That's harmless in a test, and it's why the hook is opt-in.
 - **Jest's jsdom.** `jest-environment-jsdom` 30 ships jsdom 26, where a component that sets an ARIA property on its internals (`internals.ariaLabel = ...`) throws, hook or not. Vitest with jsdom 29 handles it. With Jest, the hook still lets the scan tell that a component which never attached internals has none.
-- **Vitest and `'late'`.** Under Vitest, `@surea11y/core` 1.12.0 records the hook as `'late'`, though it ran first, because Vitest defines the window's globals differently from a page. Names and states set through internals are still read; a component that never attached internals stays a question until core reads Vitest's window as it reads a page's.
+- **Vitest.** Vitest copies the jsdom window's classes onto Node's global as getters, and `@surea11y/core` 1.12 and 1.13 then recorded the hook as `'late'`, so a component that never attached internals stayed a question. From 1.14 the hook keeps the prototype it patched, and it is `'early'` under Vitest as under Jest. The listener hook does the same.
+
+## Click handlers added from script: the listener hook
+
+Most components add their click handlers from script (a framework's `onClick`, or `addEventListener`), where no page script can list them afterwards:
+
+```js
+const save = document.createElement('div');
+save.setAttribute('role', 'button');
+save.tabIndex = 0;
+save.textContent = 'Save';
+save.addEventListener('click', onSave);
+```
+
+Enter and Space don't fire `click` on a `<div>`, so this button does nothing from the keyboard. Without help the scan can't see the listener, so `click-handler-keyboard-operable` doesn't report the element at all. `installListenerHook()` (`@surea11y/core` 1.14.0 and later) installs core's opt-in listener hook, which records the click, key, focus and mouse listeners added from then on, so the keyboard rules judge them. Call it in the setup file ([Setup file with the hooks](#setup-file-with-the-hooks)), before any component adds a listener.
+
+With it, the button above fails (`CLICK_HANDLER_NO_KEY_LISTENER`: no key listener anywhere a key event from it goes), and passes once it also listens for `keydown`; a listener set as a property (`el.onclick = fn`) counts too. `mouse-only-event-handlers` and `widget-keyboard-focusable` count the listeners as well. To see it worked, look at a scan result's `engine.environment.listenerHook`: `'early'`.
+
+Things to know:
+
+- **Frameworks that delegate events.** React adds its listeners to the root it renders into, not to each element. A click listener on a container makes no element inside it a candidate, so on such a component the scan sees the root's listeners and judges its buttons by their markup, as without the hook. It decides for components that add listeners to their own elements (plain DOM, web components, Vue, Svelte, Angular).
+- **jsdom's own listeners.** jsdom adds `keydown` and `keyup` listeners to the window the first time a selector runs, for its `:focus-visible`. Recorded as the page's, they would put a key listener above every element; `installListenerHook()` runs one selector before installing the hook, so they aren't.
+- **It changes the test window.** It wraps `addEventListener`, `removeEventListener` and the `on…` setters (your code gets the same results and errors, and its listeners aren't wrapped), and keeps its record under a global symbol. That's harmless in a test, and it's why the hook is opt-in.
+- **Without it**, a failure message says when findings the hook would have decided were judged without it (`1 finding (click-handler-keyboard-operable) was judged without seeing the listeners the page adds from script...`).
+
+Core's [`INTEGRATION.md`](https://github.com/SureA11y/core/blob/main/docs/INTEGRATION.md#seeing-listeners-added-from-script-the-listener-hook) has the details.
+
+## Live regions: the live-region hook and `toHaveAnnounced()`
+
+`installLiveRegionHook()` (`@surea11y/core` 1.14.0 and later) installs core's opt-in live-region hook, which records what the page's live regions (`aria-live`, `role="status"`, `"alert"`, `"log"`, `<output>`) are given while the test runs. It does two things:
+
+- **The scan asks about** a region added with its text already in it, and one shown and filled at once, which screen readers commonly don't announce (`live-region-announcements`, WCAG 4.1.3, `LIVE_REGION_INSERTED_WITH_CONTENT`, `LIVE_REGION_SHOWN_AND_FILLED`). They lean fail, so `{ leanFail: true }` fails on them.
+- **`toHaveAnnounced()` says what was announced**, so a test can check that an action told the user something:
+
+```js
+test('saving says so', async () => {
+  const user = userEvent.setup();
+  const { container } = render(<SaveBar />);
+  await user.click(screen.getByRole('button', { name: 'Save' }));
+
+  expect(container).toHaveAnnounced('Saved');
+  expect(window).not.toHaveAnnounced(/error/i);
+});
+```
+
+A failure lists what was announced:
+
+```
+expected "Saved" to have been announced in div, but the live regions were given:
+
+  1) "Saving…" (polite, p[role=status])
+```
+
+Things to know:
+
+- **What was given, not what was said.** It's what the page made available to announce while assistive technology could reach the region, as core's `getAnnouncements(window)` returns it, not what a screen reader said, which depends on the screen reader. A string must be the whole text (whitespace collapsed); a RegExp may match part of it.
+- **Changes are read in batches.** The hook reads changes as a `MutationObserver` delivers them, in batches. What a test does with no `await` in between is one batch, so a region rendered and filled in it was added with its text: it's no announcement, and the scan asks about it. Render, then act: `await user.click()` (Testing Library's `user-event`), or any `await` between the two, ends the batch, as a real user's click does.
+- **On an element**, only the regions it is or contains count, so `expect(container)` looks at the component you rendered. A region that has since left the page (a toast that came and went) is in no element: assert on `document` or `window` to see it. Those cover every announcement since the hook was installed in that window, earlier tests' in the same file included.
+- **Behind a modal dialog.** A text given to a region behind an open modal `<dialog>` didn't reach assistive technology: it isn't counted unless you pass `{ includeBehindModal: true }`, and the failure message lists it either way. jsdom has no `showModal()`, so this only arises where a test provides one.
+- **Shadow roots.** The hook watches the document, not inside shadow roots: a live region inside a web component's shadow root isn't recorded.
+- **Without the hook**, `toHaveAnnounced()` throws, rather than passing or failing on nothing.
+
+The hook only observes, with one `MutationObserver`; see core's [`INTEGRATION.md`](https://github.com/SureA11y/core/blob/main/docs/INTEGRATION.md#seeing-what-live-regions-are-given-the-live-region-hook).
 
 ## Failure messages
 
-When the assertion fails, the message lists every occurrence (not just every rule — one rule can flag several elements), with the rule ID, severity, a human-readable summary, the failing element's selector, and a fix hint where available. It names the `@surea11y/core` release that produced the result, to quote in a bug report:
+When the assertion fails, the message lists every failing occurrence (not just every rule — one rule can flag several elements), with the rule ID, severity, a human-readable summary, the failing element's selector, and a fix hint where available. It names the `@surea11y/core` release that produced the result, to quote in a bug report, and then lists the [questions](#findings-that-need-review-leans-and-how-to-check), which don't count as failures. With a skipped heading level beside the image:
 
 ```
 expected no accessibility violations, but found 1:
 
 1) img-alt-present (serious): This <img> has no alt attribute.
-   at body > img
+   at body > main > img
    Add an alt attribute that says what the image shows, or alt="" if the image is purely decorative.
 
-Scanned with @surea11y/core 1.12.0.
+Scanned with @surea11y/core 1.14.0.
 
-1 rule(s) need manual review (cantTell, not counted as failures): manual-review
+2 findings need manual review (cantTell, not counted as failures):
+
+1) heading-order (minor, likely fails): This heading jumps from level 1 to level 3, skipping a level.
+   at body > main > h3
+   Go down one level at a time, so an <h2> is followed by an <h3> rather than an <h4>, and the outline of the page stays easy to follow.
+   Why it likely fails: The heading skips a level after the one before it.
+
+Open questions, which only a person can answer: manual-review.
 ```
 
 An element inside a shadow root (with `engineOptions.includeShadowDom`) is located through its shadow hosts, outermost first: `at #host >>> img`.
 
-Before the version line, the message can carry a note on how the scan ran. Today that's the [internals hook](#web-components-names-set-through-elementinternals): when the scan asked about custom elements it could have read with it, a line says how many and to install it.
+Before the version line, the message can carry notes on how the scan ran: when the scan asked about custom elements it could have read with the [internals hook](#web-components-names-set-through-elementinternals), or judged findings the [listener hook](#click-handlers-added-from-script-the-listener-hook) or the [live-region hook](#live-regions-the-live-region-hook-and-tohaveannounced) would have decided, a line says how many and to install it.
 
-The last line is the `cantTell` note: any `cantTell` results alongside the failures are appended as a separate note so they stay visible without affecting `pass`/`fail`. With a vague link beside the image (`<a href="/pricing">Click here</a>`), it reads:
-
-```
-3 rule(s) need manual review (cantTell, not counted as failures): contrast-computable, link-name-quality, manual-review
-```
+The last part is the questions, listed after the failures so they stay visible without affecting `pass`/`fail`: those that lean fail, then those that lean pass, each with its lean (and its caution, and what would settle it), then the open ones by rule, with a count where a rule asks more than once (a jsdom scan can ask about contrast for every piece of text). `{ howToCheck: true }` lists every question in full, with its steps. With `{ leanFail: true }`, the questions that lean fail move up into the failures, and the header counts both (`found 1 failure and 1 likely failure:`).
 
 A scan that left something out says what, in place of findings:
 
@@ -476,8 +666,23 @@ Pack "@acme/a11y-policy" did not run: it supports core ^2.0.0, and this is core 
 
 Scanned with @surea11y/core 1.12.0.
 
-2 rule(s) need manual review (cantTell, not counted as failures): contrast-computable, manual-review
+1 finding needs manual review (cantTell, not counted as failures):
+
+Questions, which only a person can answer: manual-review.
 ```
+
+## What changes with `@surea11y/core` 1.14
+
+With `@surea11y/core` 1.14.0, what a test through this matcher shows differently (core's [`CHANGELOG.md`](https://github.com/SureA11y/core/blob/main/CHANGELOG.md) has the full list):
+
+- **Questions lean, and say how to answer them.** A `cantTell` occurrence can carry a `lean` (which way the evidence points, and why) and carries `howToCheck` (the steps to answer it). The failure message lists the questions by review group, with their leans, where it used to list rule ids. [More](#findings-that-need-review-leans-and-how-to-check).
+- **`{ leanFail: true }`** also fails the test on the questions that lean fail, with `wcagOnly` to leave out the best practices. Without it, nothing changes: a question still doesn't fail a test. [More](#tohavenoa11yviolationsreceived-engineoptions-runonly-or-received-options).
+- **Failures are counted by element.** The matcher reads each occurrence's own outcome, so a question of a failing rule is listed with the questions, and `found N` counts failing elements rather than failing rules.
+- **Two more opt-in hooks, and announcements.** `installListenerHook()` lets the keyboard rules see click handlers added from script, and `installLiveRegionHook()` records what live regions are given, which `toHaveAnnounced()` asserts on. [More](#setup-file-with-the-hooks).
+- **New checks.** `click-handler-keyboard-operable` (2.1.1, 2.1.3) fails an inline `onclick` on an element the keyboard can't reach, and asks about one that has no key handler; with the listener hook it also judges listeners added from script. `live-region-announcements` (4.1.3) asks about a live region assistive technology can't reach (`aria-hidden`, `inert`, behind a modal dialog) or left `aria-busy`. `control-name-title-only` (best practice) asks about a button or link named only by its `title`. `moving-content-pausable` (2.2.2) asks about content that moves by itself.
+- **A duplicate id no longer fails a WCAG 2.0 or 2.1 target.** The 2023 errata count 4.1.1 Parsing as met for HTML, so `duplicate-id` asks there, leaning pass, as it does under 2.2. `{ profile: 'en301549-v3.2.1' }`, whose standard keeps 4.1.1, still fails it.
+- **The internals hook is `'early'` under Vitest** too, so a component that never attached internals is no longer a question there ([Web components](#web-components-names-set-through-elementinternals)).
+- **Some reason codes are split by cause** (`LIST_ITEM_ROLE_OVERRIDDEN`, `LIST_ROLE_OVERRIDDEN`, `DUPLICATE_ID_IN_SHADOW_TREE`, `DEFAULT_LANG_INVALID`, `IMAGE_ONLY_CONTROL_CONTENT`, `HEADING_LIKE_NUMBER`, `HEADING_LIKE_LINK`): a test that matches a finding's `reasonCode` may need the new one.
 
 ## Upgrading to `@surea11y/core` 1.12
 
@@ -520,13 +725,13 @@ The matcher passes `engineOptions` and `runOnly` through to the engine, so these
 - **WCAG targets and best practices** can be chosen with `runOnly.wcag` and `runOnly.bestPractices`, the matcher's third argument ([above](#choosing-a-wcag-target-runonly)).
 - **`aria-hidden-focus` maps to 4.1.2 only**, no longer to 2.4.7 Focus Visible, so `{ tags: { include: 'wcag2aa' } }` alone no longer selects it.
 - **A custom rule counts toward its WCAG criterion.** A `customRules` rule with `meta.wcagSc` (or a WCAG `normativeMappings` entry) fails that criterion's rollup when it fails, and custom and pack rules run after core's, with read-only helpers.
-- **On/off options read as meant**: `{ includeShadowDom: 'false' }` is off, where it was on. `strictOptions: true` rejects any option the engine doesn't read, and a rule selection whose includes and excludes cancel out, which runs no rule, is warned about (see [the API](#tohavenoa11yviolationsreceived-engineoptions-runonly)).
+- **On/off options read as meant**: `{ includeShadowDom: 'false' }` is off, where it was on. `strictOptions: true` rejects any option the engine doesn't read, and a rule selection whose includes and excludes cancel out, which runs no rule, is warned about (see [the API](#tohavenoa11yviolationsreceived-engineoptions-runonly-or-received-options)).
 - **Under jsdom**, a font size given as a keyword (`xx-large`) or a `calc()` is read as a browser reads it, where the contrast rules read it as 0px; contrast still runs in `visibilityMode: 'styleOnly'`, since jsdom has no layout.
 
 
 ## Examples
 
-Runnable, side-by-side examples for both frameworks live in [`examples/`](./examples): [`basic.test.js`](./examples/basic.test.js) (Jest) and [`basic.vitest.test.js`](./examples/basic.vitest.test.js) (Vitest) — same two assertions, same matcher, only the registration syntax differs — and [`pack.test.js`](./examples/pack.test.js) and [`pack.vitest.test.js`](./examples/pack.vitest.test.js), the same with the [`acme-policy-pack.js`](./examples/acme-policy-pack.js) pack and its profile. To try them locally:
+Runnable, side-by-side examples for both frameworks live in [`examples/`](./examples): [`basic.test.js`](./examples/basic.test.js) (Jest) and [`basic.vitest.test.js`](./examples/basic.vitest.test.js) (Vitest) — same two assertions, same matcher, only the registration syntax differs — [`pack.test.js`](./examples/pack.test.js) and [`pack.vitest.test.js`](./examples/pack.vitest.test.js), the same with the [`acme-policy-pack.js`](./examples/acme-policy-pack.js) pack and its profile, and [`hooks.test.js`](./examples/hooks.test.js) and [`hooks.vitest.test.js`](./examples/hooks.vitest.test.js), a small component checked with the listener and live-region hooks, `toHaveAnnounced()` and `leanFail`. To try them locally:
 
 ```sh
 npm install
@@ -539,10 +744,12 @@ npm run test:vitest  # Vitest only
 
 This package tests itself under both frameworks it supports:
 
-- [`tests/matcher.test.js`](./tests/matcher.test.js) and [`tests/scan-element.test.js`](./tests/scan-element.test.js) — the exhaustive logic suite (rule scoping, document-wide rules, `cantTell` handling, scans that left something out, packs that run and packs that don't, shadow-DOM locations, `engineOptions` and `runOnly` passthrough, WCAG targets and best practices, `INVALID_RUN_ONLY` and `INVALID_ENGINE_OPTIONS`, thrown-input validation, mocked-throw cleanup), run under Jest since this is where the underlying logic lives; it doesn't depend on which framework eventually calls it.
-- [`tests/internals-hook.test.js`](./tests/internals-hook.test.js) and [`tests/internals-hook.vitest.test.js`](./tests/internals-hook.vitest.test.js) — `installInternalsHook()` under each runner: under Jest, the hook records itself early and a component with no internals is no longer a question; under Vitest, a component that names itself through private internals passes.
+- [`tests/matcher.test.js`](./tests/matcher.test.js) and [`tests/scan-element.test.js`](./tests/scan-element.test.js) — the exhaustive logic suite (rule scoping, document-wide rules, `cantTell` handling, failures counted by occurrence, leans in the message, `leanFail` and the options form, scans that left something out, packs that run and packs that don't, shadow-DOM locations, `engineOptions` and `runOnly` passthrough, WCAG targets and best practices, `INVALID_RUN_ONLY` and `INVALID_ENGINE_OPTIONS`, thrown-input validation, mocked-throw cleanup), run under Jest since this is where the underlying logic lives; it doesn't depend on which framework eventually calls it.
+- [`tests/internals-hook.test.js`](./tests/internals-hook.test.js) and [`tests/internals-hook.vitest.test.js`](./tests/internals-hook.vitest.test.js) — `installInternalsHook()` under each runner: the hook records itself early and a component with no internals is no longer a question; under Vitest, a component that names itself through private internals passes.
+- [`tests/listener-hook.test.js`](./tests/listener-hook.test.js) and [`tests/listener-hook.vitest.test.js`](./tests/listener-hook.vitest.test.js) — `installListenerHook()` under each runner: it records itself early, a button that only listens for clicks fails and one that also listens for keys passes.
+- [`tests/live-region-hook.test.js`](./tests/live-region-hook.test.js) and [`tests/live-region-hook.vitest.test.js`](./tests/live-region-hook.vitest.test.js) — `installLiveRegionHook()` and `toHaveAnnounced()` under each runner: what a status region is given is announced, a region added with its text isn't and leans fail, and an element scopes the assertion. [`tests/announced.test.js`](./tests/announced.test.js) covers the messages, a text behind a modal dialog and the argument checks on announcements given directly.
 - [`tests/types.test.js`](./tests/types.test.js) — compiles [`tests/types/usage.ts`](./tests/types/usage.ts) with `tsc --strict` against `@surea11y/core`'s own types, so the bundled `.d.ts` can't drift from the engine's.
-- [`tests/matcher.vitest.test.js`](./tests/matcher.vitest.test.js) — proves the same matcher, completely unmodified, integrates correctly with Vitest's own `expect.extend` (registration, `.not`, `engineOptions` and `runOnly` passthrough, packs, precomputed-result assertions, thrown `TypeError`), so this isn't just a documentation claim.
+- [`tests/matcher.vitest.test.js`](./tests/matcher.vitest.test.js) — proves the same matcher, completely unmodified, integrates correctly with Vitest's own `expect.extend` (registration, `.not`, `engineOptions` and `runOnly` passthrough, the options form with `leanFail`, packs, precomputed-result assertions, thrown `TypeError`), so this isn't just a documentation claim.
 
 ## Related
 

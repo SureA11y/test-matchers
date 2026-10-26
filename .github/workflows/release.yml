@@ -59,7 +59,7 @@ jobs:
             cd "$(mktemp -d)"
             npm init -y >/dev/null
             npm install $CORE "$RUNNER_TEMP/$TARBALL" >/dev/null
-            node -e "const m = require('@surea11y/test-matchers'); for (const k of ['toHaveNoA11yViolations', 'installInternalsHook']) if (typeof m[k] === 'undefined') throw new Error('missing export: ' + k)"
+            node -e "const m = require('@surea11y/test-matchers'); for (const k of ['toHaveNoA11yViolations', 'toHaveAnnounced', 'installInternalsHook', 'installListenerHook', 'installLiveRegionHook']) if (typeof m[k] === 'undefined') throw new Error('missing export: ' + k)"
           done
 
       - name: Publish to npm with provenance

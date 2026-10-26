@@ -3,8 +3,22 @@
 import { runDomRulesInPage } from '@surea11y/core';
 import type { ScanResult } from '@surea11y/core';
 import { definePack } from '@surea11y/core/pack';
-import { installInternalsHook, toHaveNoA11yViolations } from '../../src/index';
-import type { A11yRunOnly, A11yScanResult, EngineOptions, StrictEngineOptions } from '../../src/index';
+import {
+  installInternalsHook,
+  installListenerHook,
+  installLiveRegionHook,
+  toHaveAnnounced,
+  toHaveNoA11yViolations
+} from '../../src/index';
+import type {
+  A11yMatcherOptions,
+  A11yRunOnly,
+  A11yScanResult,
+  Announcement,
+  EngineOptions,
+  StrictEngineOptions,
+  ToHaveAnnouncedOptions
+} from '../../src/index';
 
 declare const container: HTMLElement;
 
@@ -22,6 +36,19 @@ const strictScan = toHaveNoA11yViolations(container, strict);
 
 installInternalsHook();
 installInternalsHook(window);
+installListenerHook();
+installListenerHook(window);
+installLiveRegionHook(window);
+
+const leaning: A11yMatcherOptions = { engineOptions: options, runOnly: wcag22, leanFail: true, wcagOnly: true };
+const withLeans = toHaveNoA11yViolations(container, leaning);
+const withSteps = toHaveNoA11yViolations(document, { leanFail: true, howToCheck: true });
+
+const behindModal: ToHaveAnnouncedOptions = { includeBehindModal: true };
+const saved = toHaveAnnounced(window, 'Saved');
+const anyStatus = toHaveAnnounced(container, /saved/i, behindModal);
+const anything = toHaveAnnounced(document);
+const said: Announcement['politeness'] = 'polite';
 
 const result: ScanResult = runDomRulesInPage(null, '#main', {}, null);
 const reused = toHaveNoA11yViolations(result);
@@ -36,7 +63,8 @@ const handBuilt: A11yScanResult = {
 const fromObject = toHaveNoA11yViolations(handBuilt);
 
 const passed: boolean =
-  scoped.pass && whole.pass && withPack.pass && targeted.pass && byTag.pass && strictScan.pass && reused.pass && fromObject.pass;
+  scoped.pass && whole.pass && withPack.pass && targeted.pass && byTag.pass && strictScan.pass && reused.pass && fromObject.pass &&
+  withLeans.pass && withSteps.pass && saved.pass && anyStatus.pass && anything.pass;
 const message: string = scoped.message();
 
-export { passed, message };
+export { passed, message, said };

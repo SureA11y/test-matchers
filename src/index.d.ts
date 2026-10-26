@@ -18,9 +18,17 @@
 // test runner calling toHaveNoA11yViolations() directly -- never sees an
 // error from the other framework's block.
 
-import type { EngineOptions, LegacyTagRunOnly, RunOnly, ScanResult, StrictEngineOptions, StringList } from '@surea11y/core';
+import type {
+  Announcement,
+  EngineOptions,
+  LegacyTagRunOnly,
+  RunOnly,
+  ScanResult,
+  StrictEngineOptions,
+  StringList
+} from '@surea11y/core';
 
-export type { EngineOptions, RunOnly, ScanResult, StrictEngineOptions };
+export type { Announcement, EngineOptions, RunOnly, ScanResult, StrictEngineOptions };
 
 /** core's 4th scan argument: a WCAG target, best practices, rule ids or tags. */
 export type A11yRunOnly = RunOnly | LegacyTagRunOnly | StringList;
@@ -46,10 +54,58 @@ export interface A11yScanResult {
   [key: string]: unknown;
 }
 
+/**
+ * toHaveNoA11yViolations()'s options form, in place of (engineOptions,
+ * runOnly). Failures gate the assertion, counted by each occurrence's own
+ * outcome; questions (cantTell) don't, unless `leanFail` adds those that
+ * lean fail.
+ */
+export interface A11yMatcherOptions {
+  /** core's third scan argument. Ignored for a precomputed result. */
+  engineOptions?: EngineOptions | StrictEngineOptions | null;
+  /** core's fourth scan argument. Ignored for a precomputed result. */
+  runOnly?: A11yRunOnly | null;
+  /**
+   * Also fail on the questions that lean fail (core's leaningFailures(),
+   * @surea11y/core 1.14.0 and later), leaving out the rules whose WCAG
+   * criteria are all outside the scan's target. Default: false.
+   */
+  leanFail?: boolean;
+  /** With leanFail: only the questions of rules mapped to a WCAG criterion in the target. */
+  wcagOnly?: boolean;
+  /** List every question in the failure message in full, with the steps that answer it. */
+  howToCheck?: boolean;
+}
+
 export function toHaveNoA11yViolations(
   received: Node | ScanResult | A11yScanResult,
   engineOptions?: EngineOptions | StrictEngineOptions | null,
   runOnly?: A11yRunOnly | null
+): { pass: boolean; message: () => string };
+export function toHaveNoA11yViolations(
+  received: Node | ScanResult | A11yScanResult,
+  options: A11yMatcherOptions
+): { pass: boolean; message: () => string };
+
+export interface ToHaveAnnouncedOptions {
+  /**
+   * Also count a text given to a region behind an open modal dialog, which
+   * assistive technology did not get. Default: false.
+   */
+  includeBehindModal?: boolean;
+}
+
+/**
+ * Passes when a live region was given `expected` (the whole text, as a
+ * string, or a RegExp; anything, when left out), as core's live-region
+ * hook recorded it (getAnnouncements(), @surea11y/core 1.14.0 and later).
+ * On an element, only the regions it is or contains count. Throws without
+ * the hook: call installLiveRegionHook() in a setup file.
+ */
+export function toHaveAnnounced(
+  received: Window | Document | Element,
+  expected?: string | RegExp,
+  options?: ToHaveAnnouncedOptions
 ): { pass: boolean; message: () => string };
 
 /**
@@ -60,8 +116,26 @@ export function toHaveNoA11yViolations(
  */
 export function installInternalsHook(win?: Window): void;
 
+/**
+ * Installs @surea11y/core's listener hook (1.14.0 and later) in the test's
+ * jsdom window, so the keyboard rules see the click, key, focus and mouse
+ * listeners added from script. Call it in a setup file, before any code
+ * under test adds a listener. `win` defaults to the global `window`.
+ */
+export function installListenerHook(win?: Window): void;
+
+/**
+ * Installs @surea11y/core's live-region hook (1.14.0 and later) in the
+ * test's jsdom window, so a scan sees what live regions were given and
+ * toHaveAnnounced() can read it. Call it in a setup file. `win` defaults
+ * to the global `window`.
+ */
+export function installLiveRegionHook(win?: Window): void;
+
 interface A11yCustomMatchers<R = unknown> {
   toHaveNoA11yViolations(engineOptions?: EngineOptions | StrictEngineOptions | null, runOnly?: A11yRunOnly | null): R;
+  toHaveNoA11yViolations(options: A11yMatcherOptions): R;
+  toHaveAnnounced(expected?: string | RegExp, options?: ToHaveAnnouncedOptions): R;
 }
 
 declare global {
