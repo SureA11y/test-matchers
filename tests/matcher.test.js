@@ -252,18 +252,134 @@ describe('core 1.12', () => {
   });
 });
 
+describe('core 1.14', () => {
+  const skippedLevel = '<main><h1>Title</h1><h3>Details</h3></main>';
+
+  test('failures are counted by each occurrence, so a failing rule\'s questions do not fail the assertion', () => {
+    const result = {
+      checksResults: [
+        {
+          ruleId: 'mixed-rule',
+          outcome: 'fail',
+          severity: 'serious',
+          occurrences: [
+            { summary: 'broken', selector: '#a', occurrenceOutcome: 'fail' },
+            { summary: 'unsure', selector: '#b', occurrenceOutcome: 'cantTell' }
+          ]
+        },
+        {
+          ruleId: 'asking-rule',
+          outcome: 'fail',
+          severity: 'minor',
+          occurrences: [{ summary: 'only asks', selector: '#c', occurrenceOutcome: 'cantTell' }]
+        }
+      ]
+    };
+    const { pass, message } = toHaveNoA11yViolations(result);
+    expect(pass).toBe(false);
+    expect(message()).toMatch(/found 1:\n\n1\) mixed-rule \(serious\): broken\n {3}at #a\n\n2 findings need manual review/);
+    expect(message()).toMatch(/Questions, which only a person can answer: mixed-rule, asking-rule\.$/);
+
+    const onlyQuestions = { checksResults: [result.checksResults[1]] };
+    expect(toHaveNoA11yViolations(onlyQuestions).pass).toBe(true);
+  });
+
+  test('the message lists the questions that lean, with their leans, likely failures first, and the open ones by rule', () => {
+    document.body.innerHTML = skippedLevel + '<div id="a"></div><div id="a"></div><img src="x.png">';
+    const { message } = toHaveNoA11yViolations(document, {}, { wcag: { version: '2.1', level: 'A' }, bestPractices: true });
+    const text = message();
+    expect(text).toMatch(/\d\) heading-order \(minor, likely fails\): .*\n {3}at .*h3\n.*\n {3}Why it likely fails: /);
+    expect(text).toMatch(/\d\) duplicate-id \(\w+, likely passes\): [\s\S]*Why it likely passes: [\s\S]*Caution: /);
+    expect(text.indexOf('likely fails')).toBeLessThan(text.indexOf('likely passes'));
+    expect(text).toMatch(/Open questions, which only a person can answer: .*manual-review/);
+    expect(text).not.toMatch(/How to check:/);
+  });
+
+  test('howToCheck: true lists every question in full, with its steps', () => {
+    document.body.innerHTML = skippedLevel + '<img src="x.png">';
+    const { message } = toHaveNoA11yViolations(document.body, { howToCheck: true });
+    expect(message()).toMatch(/heading-order \(minor, likely fails\)[\s\S]*How to check:\n {5}1\. [\s\S]*Passes when: [\s\S]*Fails when: /);
+    expect(message()).toMatch(/manual-review \(moderate, needs review\)/);
+    expect(message()).not.toMatch(/Open questions/);
+    expect(message()).not.toMatch(/data-surea11y-jest-scope/); // manual-review, about the element itself
+  });
+
+  test('a question that leans fail passes by default, and fails with leanFail: true', () => {
+    document.body.innerHTML = skippedLevel;
+    expect(toHaveNoA11yViolations(document.body).pass).toBe(true);
+
+    const { pass, message } = toHaveNoA11yViolations(document.body, { leanFail: true });
+    expect(pass).toBe(false);
+    expect(message()).toMatch(/^expected no accessibility violations or likely failures, but found 1 likely failure:\n\n1\) heading-order \(minor, likely fails\)/);
+    expect(message()).toMatch(/Why it likely fails: /);
+  });
+
+  test('leanFail counts failures and likely failures apart, and wcagOnly leaves out the best-practice rules', () => {
+    document.body.innerHTML = skippedLevel + '<img src="x.png">';
+    const both = toHaveNoA11yViolations(document.body, { leanFail: true });
+    expect(both.message()).toMatch(/found 1 failure and 1 likely failure:\n\n1\) img-alt-present [\s\S]*\n2\) heading-order \(minor, likely fails\)/);
+
+    document.querySelector('img').alt = 'Acme Corporation';
+    expect(toHaveNoA11yViolations(document.body, { leanFail: true }).pass).toBe(false);
+    expect(toHaveNoA11yViolations(document.body, { leanFail: true, wcagOnly: true }).pass).toBe(true);
+  });
+
+  test('the options form carries engineOptions and runOnly', () => {
+    document.body.innerHTML = skippedLevel + '<img src="x.png">';
+    expect(toHaveNoA11yViolations(document.body, { engineOptions: { rules: { include: 'heading-order' } }, leanFail: true }).pass).toBe(false);
+    expect(toHaveNoA11yViolations(document.body, { engineOptions: { rules: { include: 'heading-order' } } }).pass).toBe(true);
+    expect(toHaveNoA11yViolations(document.body, { runOnly: { includeRuleIds: ['heading-order'] }, leanFail: true, wcagOnly: true }).pass).toBe(true);
+    expect(toHaveNoA11yViolations(document.body, { runOnly: { wcag: { version: '2.2', level: 'AA' } } }).pass).toBe(false); // the <img>
+  });
+
+  test('registered via expect.extend, takes the options form', () => {
+    expect.extend({ toHaveNoA11yViolations });
+    document.body.innerHTML = skippedLevel;
+    expect(document.body).toHaveNoA11yViolations();
+    expect(document.body).not.toHaveNoA11yViolations({ leanFail: true });
+    expect(() => expect(document.body).toHaveNoA11yViolations({ leanFail: true })).toThrow(/heading-order \(minor, likely fails\)/);
+  });
+
+  test('an options form it cannot read throws a TypeError', () => {
+    document.body.innerHTML = skippedLevel;
+    expect(() => toHaveNoA11yViolations(document.body, { leanFail: true, rules: { include: 'heading-order' } })).toThrow(
+      /no option named "rules".*Put engine options under engineOptions/
+    );
+    expect(() => toHaveNoA11yViolations(document.body, { leanFail: true }, { bestPractices: true })).toThrow(/give runOnly inside the options object/);
+    expect(() => toHaveNoA11yViolations(document.body, { leanFail: 'yes' })).toThrow(/leanFail must be true or false/);
+    expect(() => toHaveNoA11yViolations(document.body, { wcagOnly: true })).toThrow(/pass leanFail: true with it/);
+  });
+
+  test('a click handler set without the listener hook makes the message say how to have it judged', () => {
+    document.body.innerHTML = '<main><h1>Hi</h1><div role="button" tabindex="0" onclick="save()">Save</div><img src="x.png"></main>';
+    const { pass, message } = toHaveNoA11yViolations(document.body);
+    expect(pass).toBe(false);
+    expect(message()).toMatch(/judged without seeing the listeners the page adds from script\. Install the listener hook .*installListenerHook\(\)/);
+  });
+
+  test('toHaveAnnounced() throws, rather than passes or fails, without the live-region hook', () => {
+    const { toHaveAnnounced } = require('../src/index');
+    expect(() => toHaveAnnounced(document, 'Saved')).toThrow(/the live-region hook is not installed in this window[\s\S]*installLiveRegionHook\(\)/);
+  });
+});
+
 describe('runOnly', () => {
   const duplicateIds = '<main><h1>Hi</h1><div id="a"></div><div id="a"></div></main>';
 
-  test('a WCAG 2.1 target runs 4.1.1 Parsing, which a 2.2 target leaves out', () => {
-    document.body.innerHTML = duplicateIds;
+  test('a WCAG 2.1 target asks about 4.1.1 Parsing, which the errata count as met; EN 301 549 V3.2.1 still fails it', () => {
+    document.body.innerHTML = duplicateIds + '<img src="x.png">';
 
     const wcag21 = toHaveNoA11yViolations(document, {}, { wcag: { version: '2.1', level: 'A' } });
-    const wcag22 = toHaveNoA11yViolations(document, {}, { wcag: { version: '2.2', level: 'AA' } });
+    expect(wcag21.pass).toBe(false); // the <img>
+    expect(wcag21.message()).toMatch(/manual review[\s\S]*\d\) duplicate-id \(\w+, likely passes\)/);
 
-    expect(wcag21.pass).toBe(false);
-    expect(wcag21.message()).toMatch(/duplicate-id/);
-    expect(wcag22.pass).toBe(true);
+    document.querySelector('img').alt = 'Logo';
+    expect(toHaveNoA11yViolations(document, {}, { wcag: { version: '2.1', level: 'A' } }).pass).toBe(true);
+    expect(toHaveNoA11yViolations(document, {}, { wcag: { version: '2.2', level: 'AA' } }).pass).toBe(true);
+
+    const en = toHaveNoA11yViolations(document, { profile: 'en301549-v3.2.1' });
+    expect(en.pass).toBe(false);
+    expect(en.message()).toMatch(/found \d+:\n\n1\) duplicate-id/);
   });
 
   test('bestPractices adds the best-practice rules to a WCAG target', () => {
@@ -273,7 +389,7 @@ describe('runOnly', () => {
     const withBestPractices = toHaveNoA11yViolations(document, {}, { wcag: { version: '2.2', level: 'AA' }, bestPractices: true });
 
     expect(target.message()).not.toMatch(/\bregion\b/);
-    expect(withBestPractices.message()).toMatch(/manual review.*\bregion\b/);
+    expect(withBestPractices.message()).toMatch(/manual review[\s\S]*\d\) region \(minor, likely fails\)/);
   });
 
   test('a WCAG target the engine does not know throws INVALID_RUN_ONLY', () => {
@@ -285,8 +401,8 @@ describe('runOnly', () => {
 
   test('registered via expect.extend, takes runOnly as the second argument', () => {
     expect.extend({ toHaveNoA11yViolations });
-    document.body.innerHTML = duplicateIds;
-    expect(document).not.toHaveNoA11yViolations({}, { wcag: { version: '2.1', level: 'A' } });
+    document.body.innerHTML = '<main><h1>Title</h1><h2></h2></main>';
+    expect(document).not.toHaveNoA11yViolations({}, { bestPractices: true });
     expect(document).toHaveNoA11yViolations({}, { wcag: { version: '2.2', level: 'AA' } });
   });
 });

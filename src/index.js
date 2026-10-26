@@ -1,6 +1,13 @@
 'use strict';
 
 const { toHaveNoA11yViolations } = require('./matcher');
-const { installInternalsHook } = require('./internals-hook');
+const { toHaveAnnounced } = require('./announced');
+const { installInternalsHook, installListenerHook, installLiveRegionHook } = require('./hooks');
 
-module.exports = { toHaveNoA11yViolations, installInternalsHook };
+module.exports = {
+  toHaveNoA11yViolations,
+  toHaveAnnounced,
+  installInternalsHook,
+  installListenerHook,
+  installLiveRegionHook
+};
