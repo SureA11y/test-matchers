@@ -413,3 +413,44 @@ test('strictOptions throws INVALID_ENGINE_OPTIONS on an option the engine does n
     expect.objectContaining({ code: 'INVALID_ENGINE_OPTIONS', message: expect.stringMatching(/did you mean "locale"/) })
   );
 });
+
+// A scan of several profiles (core 1.15): a profile it was asked for and
+// didn't run fails the assertion, as a skipped pack does. Needs a core that
+// takes a list and a binding-base that reports the gap.
+const profileLists = (() => {
+  const warn = console.warn;
+  console.warn = () => {};
+  try {
+    document.body.innerHTML = '<main><h1>Hi</h1></main>';
+    const result = scanElement(document, { profile: ['wcag22-aa', 'nowhere-1.0'] });
+    const { getScanGaps } = require('@surea11y/binding-base');
+    return getScanGaps(result).some((g) => g.kind === 'profile-not-run');
+  } catch {
+    return false;
+  } finally {
+    console.warn = warn;
+  }
+})();
+
+(profileLists ? describe : describe.skip)('several profiles', () => {
+  beforeEach(() => {
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    console.warn.mockRestore();
+  });
+
+  test('a profile the scan did not run fails the assertion, naming it', () => {
+    document.body.innerHTML = '<main><h1>Hi</h1></main>';
+    const { pass, message } = toHaveNoA11yViolations(document, { profile: ['wcag22-aa', 'nowhere-1.0'] });
+    expect(pass).toBe(false);
+    expect(message()).toMatch(/left out what it was asked to check/);
+    expect(message()).toMatch(/Profile "nowhere-1\.0" was asked for and did not run/);
+  });
+
+  test('every profile run, and nothing found, passes', () => {
+    document.body.innerHTML = '<main><h1>Hi</h1></main>';
+    const { pass } = toHaveNoA11yViolations(document, { profile: ['wcag22-aa', 'section508'] });
+    expect(pass).toBe(true);
+  });
+});
