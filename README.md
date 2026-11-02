@@ -383,6 +383,14 @@ expect(container).toHaveNoA11yViolations({ profile: 'en301549-v4.1.1' });
 
 As with any target, passing means no rule found a violation, not that the component conforms: most criteria need a person to check them (see [What it checks and doesn't](#what-it-checks-and-doesnt)). A profile name core doesn't know is not an error: the scan runs without it and core logs a `console.warn`.
 
+With `@surea11y/core` 1.15, `profile` also takes a list, to judge the component by several profiles at once, a pack's beside WCAG's: each profile judges it as it would alone, and a failure under any of them fails the assertion. Here a profile that didn't run does fail it (see [Scans that left something out](#scans-that-left-something-out)), since the scan judged less than it was asked to:
+
+```js
+const waiAria = require('@surea11y/pack-wai-aria');
+
+expect(container).toHaveNoA11yViolations({ packs: [waiAria], profile: ['wcag22-aa', 'wai-aria-1.2'] });
+```
+
 ## Scanning with packs: standards, checklists and your own rules
 
 A pack brings rules, variants of core's rules, a standard or a checklist, and their profiles and messages, from a package of its own: a national standard such as RGAA, or your organisation's accessibility policy. `@surea11y/core` runs a pack as it runs its own rules and standards, so its findings, rollups and failure messages look like core's. Packs need `@surea11y/core` 1.11.1 or later.
@@ -443,8 +451,9 @@ A scan can come back with nothing failed because it checked nothing. Since `@sur
   ); // passes when org-a finds nothing
   ```
 - **A pack did not run** (`engineOptions.packs`, `@surea11y/core` 1.11 and later): its `core` range leaves out the installed core, it isn't valid, or its namespace clashes with another pack's. The result lists it in `skippedPacks`, and the message names it with the reason, so the assertion can't pass with the pack's rules never run.
+- **A profile did not run** in a scan of several (`engineOptions.profile` as a list, `@surea11y/core` 1.15 and later): no such profile, its pack didn't run, or `runOnly` chose the rules instead. The result lists it in `engine.profilesNotRun`, and the message names it with the reason, so the assertion can't pass having judged the component by fewer profiles than it asked for.
 
-These are the gap kinds binding-base's `getScanGaps()` reports as `'context-not-found'`, `'custom-rule-skipped'` and `'pack-skipped'`; the fourth, `'context-partly-not-found'`, is only reported.
+These are the gap kinds binding-base's `getScanGaps()` reports as `'context-not-found'`, `'custom-rule-skipped'`, `'pack-skipped'` and `'profile-not-run'`; the fifth, `'context-partly-not-found'`, is only reported.
 
 A precomputed result whose scope was only partly found (several selectors, some matching nothing) is not failed for it: the rest was scanned. The message names the missing selectors whenever it is shown.
 
