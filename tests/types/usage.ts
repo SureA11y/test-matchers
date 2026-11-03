@@ -73,10 +73,15 @@ const handBuilt: A11yScanResult = {
   engine: { version: '1.11.1' }
 };
 const fromObject = toHaveNoA11yViolations(handBuilt);
+const notRunProfiles: A11yScanResult = {
+  checksResults: [],
+  engine: { version: '1.15.0', profilesNotRun: [{ profile: 'nowhere-1.0', reason: 'unknown-profile' }] }
+};
+const notRun: string = (notRunProfiles.engine?.profilesNotRun ?? []).map((p) => p.profile).join(', ');
 
 const passed: boolean =
   scoped.pass && whole.pass && withPack.pass && targeted.pass && byTag.pass && strictScan.pass && reused.pass && fromObject.pass &&
   withLeans.pass && withSteps.pass && saved.pass && anyStatus.pass && anything.pass && gated.pass && ungated.pass && gatedForm.pass;
-const message: string = scoped.message();
+const message: string = scoped.message() + notRun;
 
 export { passed, message, said };
