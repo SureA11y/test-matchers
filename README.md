@@ -57,14 +57,14 @@ Registration is the usual one: `expect.extend()` once in a setup file, then asse
 
 - **No `await` and no separate scan call.** Pass the container itself; the matcher scans it, synchronously.
 - **Only proven violations fail the test.** Findings that need a person to judge (is this alt text *meaningful*?) are reported as `cantTell` and listed in the message, but don't fail a test on their own unless you ask for it with `leanFail`. See [Why](#why).
-- **A scan that checked nothing fails.** A detached element, or a custom rule or pack that did not run, fails the assertion instead of passing on nothing. See [Scans that left something out](#scans-that-left-something-out).
+- **A scan that checked nothing fails.** A detached element, or a custom rule, pack or profile that did not run, fails the assertion instead of passing on nothing. See [Scans that left something out](#scans-that-left-something-out).
 - **Rule ids, tags and options are surea11y's.** See [Filtering and configuring scans](#filtering-and-configuring-scans-engineoptions).
 
 The matcher itself has no framework-specific code — `toHaveNoA11yViolations()` is a plain function returning Jest's/Vitest's shared `{ pass, message }` matcher shape, so it plugs into either framework's `expect.extend()` unmodified. Everything below applies identically to both; where setup differs (registration, TypeScript types), both are shown side by side.
 
 ## Why
 
-surea11y is built around a conservative philosophy: **never report a violation unless it can be proven**. Each rule makes one deterministic decision — `fail` when a violation is objectively certain, `cantTell` when it requires human judgement (e.g. whether alt text is *meaningful*, not just present). This matcher keeps that same contract: failures gate the assertion, and `cantTell` findings are surfaced for visibility but don't break a passing test. With `@surea11y/core` 1.14, a `cantTell` can lean one way; `{ leanFail: true }` also fails the test on the ones that likely fail, when you choose to (see [Findings that need review](#findings-that-need-review-leans-and-how-to-check)). A scan that could not check what it was asked to (an element not in the document, a custom rule or a pack that did not run) fails too, rather than passing on nothing. See ["What it checks and doesn't"](#what-it-checks-and-doesnt) below.
+surea11y is built around a conservative philosophy: **never report a violation unless it can be proven**. Each rule makes one deterministic decision — `fail` when a violation is objectively certain, `cantTell` when it requires human judgement (e.g. whether alt text is *meaningful*, not just present). This matcher keeps that same contract: failures gate the assertion, and `cantTell` findings are surfaced for visibility but don't break a passing test. With `@surea11y/core` 1.14, a `cantTell` can lean one way; `{ leanFail: true }` also fails the test on the ones that likely fail, when you choose to (see [Findings that need review](#findings-that-need-review-leans-and-how-to-check)). A scan that could not check what it was asked to (an element not in the document, a custom rule, a pack or a profile that did not run) fails too, rather than passing on nothing. See ["What it checks and doesn't"](#what-it-checks-and-doesnt) below.
 
 ## Requirements
 
@@ -381,9 +381,9 @@ EN 301 549, the standard the European Accessibility Act refers to, restates WCAG
 expect(container).toHaveNoA11yViolations({ profile: 'en301549-v4.1.1' });
 ```
 
-As with any target, passing means no rule found a violation, not that the component conforms: most criteria need a person to check them (see [What it checks and doesn't](#what-it-checks-and-doesnt)). A profile name core doesn't know is not an error: the scan runs without it and core logs a `console.warn`.
+As with any target, passing means no rule found a violation, not that the component conforms: most criteria need a person to check them (see [What it checks and doesn't](#what-it-checks-and-doesnt)). A profile name core doesn't know is not an error to core, which scans by its default rules and logs a `console.warn`, but it fails the assertion (with `@surea11y/binding-base` 1.7.0 and later), since the component wasn't judged by the profile asked for (see [Scans that left something out](#scans-that-left-something-out)).
 
-With `@surea11y/core` 1.15, `profile` also takes a list, to judge the component by several profiles at once, a pack's beside WCAG's: each profile judges it as it would alone, and a failure under any of them fails the assertion. Here a profile that didn't run does fail it (see [Scans that left something out](#scans-that-left-something-out)), since the scan judged less than it was asked to:
+With `@surea11y/core` 1.15, `profile` also takes a list, to judge the component by several profiles at once, a pack's beside WCAG's: each profile judges it as it would alone, and a failure under any of them fails the assertion. A profile in the list that didn't run fails it too (with `@surea11y/binding-base` 1.7.0 and later; see [Scans that left something out](#scans-that-left-something-out)), since the scan judged less than it was asked to:
 
 ```js
 const waiAria = require('@surea11y/pack-wai-aria');
@@ -451,7 +451,7 @@ A scan can come back with nothing failed because it checked nothing. Since `@sur
   ); // passes when org-a finds nothing
   ```
 - **A pack did not run** (`engineOptions.packs`, `@surea11y/core` 1.11 and later): its `core` range leaves out the installed core, it isn't valid, or its namespace clashes with another pack's. The result lists it in `skippedPacks`, and the message names it with the reason, so the assertion can't pass with the pack's rules never run.
-- **A profile did not run** in a scan of several (`engineOptions.profile` as a list, `@surea11y/core` 1.15 and later): no such profile, its pack didn't run, or `runOnly` chose the rules instead. The result lists it in `engine.profilesNotRun`, and the message names it with the reason, so the assertion can't pass having judged the component by fewer profiles than it asked for. One profile, or a list of one, that the scan didn't apply fails it the same way: core lists no profile not run for it and scans by its default rules.
+- **A profile did not run** in a scan of several (`engineOptions.profile` as a list, `@surea11y/core` 1.15 and `@surea11y/binding-base` 1.7.0 and later): no such profile, its pack didn't run, or `runOnly` chose the rules instead. The result lists it in `engine.profilesNotRun`, and the message names it with the reason, so the assertion can't pass having judged the component by fewer profiles than it asked for. One profile, or a list of one, that the scan didn't apply fails it the same way: core lists no profile not run for it and scans by its default rules.
 
 These are the gap kinds binding-base's `getScanGaps()` reports as `'context-not-found'`, `'custom-rule-skipped'`, `'pack-skipped'` and `'profile-not-run'`; the fifth, `'context-partly-not-found'`, is only reported.
 
