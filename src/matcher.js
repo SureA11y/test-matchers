@@ -248,6 +248,41 @@ function describeQuestions(questions, howToCheck) {
   return `${plural(total, 'finding needs', 'findings need')} manual review (cantTell, not counted as failures):\n\n${blocks.join('\n\n')}`;
 }
 
+// One profile asked for (a name, or a list of one) that the scan didn't
+// apply: core lists a profile not run only for a list of two or more, and
+// scans one it can't apply by the default rules, which would pass as
+// judged by it. The result is given the profile-not-run entry a list's
+// would carry, so the assertion fails on it as it does for a list.
+function withSingleProfileNotRun(result, engineOptions) {
+  const asked = engineOptions.profile;
+  const names = (Array.isArray(asked) ? asked : [asked])
+    .filter((p) => typeof p === 'string' && p.trim())
+    .map((p) => p.trim());
+  if (new Set(names.map((p) => p.toLowerCase())).size !== 1) return result;
+  const engine = (result && result.engine) || {};
+  if (Array.isArray(engine.profilesNotRun)) return result;
+  const name = names[0];
+  const applied = engine.profile;
+  if (typeof applied === 'string' && applied.toLowerCase() === name.toLowerCase()) return result;
+  // Why, as core says it for a list: a profile core or a pack given has
+  // that wasn't applied was skipped with its pack or overridden by a
+  // selection of rules; any other name is no profile.
+  const same = (k) => k.toLowerCase() === name.toLowerCase();
+  const skipped = new Set((Array.isArray(result.skippedPacks) ? result.skippedPacks : []).map((p) => p && p.name));
+  let reason = 'unknown-profile';
+  for (const pack of Array.isArray(engineOptions.packs) ? engineOptions.packs : []) {
+    const profiles = pack && typeof pack === 'object' && pack.standard && pack.standard.profiles;
+    if (!profiles || typeof profiles !== 'object' || !Object.keys(profiles).some(same)) continue;
+    reason = skipped.has(pack.name) || skipped.has(`${pack.name}@${pack.version}`) ? 'pack-skipped' : 'overridden-by-selection';
+    break;
+  }
+  if (reason === 'unknown-profile') {
+    const { getProfileWcagTarget } = require('@surea11y/core');
+    if (typeof getProfileWcagTarget === 'function' && getProfileWcagTarget(name)) reason = 'overridden-by-selection';
+  }
+  return { ...result, engine: { ...engine, profilesNotRun: [{ profile: name, reason }] } };
+}
+
 // Jest custom matcher:
 //   expect(received).toHaveNoA11yViolations(engineOptions?, runOnly?, options?)
 //   expect(received).toHaveNoA11yViolations({ engineOptions?, runOnly?, failOnSeverity?, leanFail?, wcagOnly?, howToCheck? })
@@ -285,6 +320,7 @@ function toHaveNoA11yViolations(received, ...args) {
   } else if (received && typeof received.nodeType === 'number') {
     result = scanElement(received, engineOptions || {}, runOnly === undefined ? null : runOnly);
     scannedElement = received.nodeType !== 9; /* Node.DOCUMENT_NODE */
+    result = withSingleProfileNotRun(result, engineOptions || {});
   } else {
     throw new TypeError('toHaveNoA11yViolations() expects a DOM element/document or a surea11y scan result.');
   }

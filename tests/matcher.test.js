@@ -454,3 +454,38 @@ const profileLists = (() => {
     expect(pass).toBe(true);
   });
 });
+
+// One profile, or a list of one, that the scan didn't apply fails the
+// assertion as a list's does: core scans it by the default rules and lists
+// no profile not run for it.
+describe('one profile', () => {
+  beforeEach(() => {
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    console.warn.mockRestore();
+  });
+
+  test.each([['nowhere-1.0'], [['nowhere-1.0']], [['nowhere-1.0', 'NOWHERE-1.0']]])(
+    'a profile no one has (%j) fails the assertion, naming it',
+    (profile) => {
+      document.body.innerHTML = '<main><h1>Hi</h1></main>';
+      const { pass, message } = toHaveNoA11yViolations(document, { profile });
+      expect(pass).toBe(false);
+      expect(message()).toMatch(/Profile "nowhere-1\.0" was asked for and did not run: no such profile/);
+    }
+  );
+
+  test('a profile a runOnly selection overrides fails the assertion, saying so', () => {
+    document.body.innerHTML = '<main><h1>Hi</h1></main>';
+    const { pass, message } = toHaveNoA11yViolations(document, { profile: 'section508' }, { type: 'tag', values: ['wcag2a'] });
+    expect(pass).toBe(false);
+    expect(message()).toMatch(/Profile "section508" was asked for and did not run: the rules chosen/);
+  });
+
+  test('a profile applied, in any case, passes', () => {
+    document.body.innerHTML = '<main><h1>Hi</h1></main>';
+    expect(toHaveNoA11yViolations(document, { profile: 'WCAG22-AA' }).pass).toBe(true);
+    expect(toHaveNoA11yViolations(document, { profile: ['wcag22-aa'] }).pass).toBe(true);
+  });
+});
