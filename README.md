@@ -451,7 +451,7 @@ A scan can come back with nothing failed because it checked nothing. Since `@sur
   ); // passes when org-a finds nothing
   ```
 - **A pack did not run** (`engineOptions.packs`, `@surea11y/core` 1.11 and later): its `core` range leaves out the installed core, it isn't valid, or its namespace clashes with another pack's. The result lists it in `skippedPacks`, and the message names it with the reason, so the assertion can't pass with the pack's rules never run.
-- **A profile did not run** in a scan of several (`engineOptions.profile` as a list, `@surea11y/core` 1.15 and later): no such profile, its pack didn't run, or `runOnly` chose the rules instead. The result lists it in `engine.profilesNotRun`, and the message names it with the reason, so the assertion can't pass having judged the component by fewer profiles than it asked for.
+- **A profile did not run** in a scan of several (`engineOptions.profile` as a list, `@surea11y/core` 1.15 and later): no such profile, its pack didn't run, or `runOnly` chose the rules instead. The result lists it in `engine.profilesNotRun`, and the message names it with the reason, so the assertion can't pass having judged the component by fewer profiles than it asked for. One profile, or a list of one, that the scan didn't apply fails it the same way: core lists no profile not run for it and scans by its default rules.
 
 These are the gap kinds binding-base's `getScanGaps()` reports as `'context-not-found'`, `'custom-rule-skipped'`, `'pack-skipped'` and `'profile-not-run'`; the fifth, `'context-partly-not-found'`, is only reported.
 
