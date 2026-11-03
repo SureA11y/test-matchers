@@ -38,8 +38,10 @@ export type A11yRunOnly = RunOnly | LegacyTagRunOnly | StringList;
  * @surea11y/core ScanResult fits; so does a hand-built object with just
  * `checksResults`. A result whose `contextMatch.elementCount` is 0, or that
  * lists `skippedCustomRules` (@surea11y/core 1.10.0 and later) or
- * `skippedPacks` (1.11 and later), fails the assertion. A custom rule the
- * test excluded itself (`excluded: true`, core 1.12.0) doesn't.
+ * `skippedPacks` (1.11 and later), or a profile it was asked for and did
+ * not run (`engine.profilesNotRun`, 1.15 and later), fails the assertion. A
+ * custom rule the test excluded itself (`excluded: true`, core 1.12.0)
+ * doesn't.
  */
 export interface A11yScanResult {
   checksResults: ReadonlyArray<{ ruleId: string; outcome: string; severity?: string; occurrences: readonly unknown[] }>;
@@ -49,8 +51,16 @@ export interface A11yScanResult {
   skippedCustomRules?: Array<{ id: string | null; reason: string; excluded?: true }>;
   /** Packs that did not run, and why. */
   skippedPacks?: Array<{ name: string | null; reason: string }>;
-  /** `version` is the @surea11y/core release that produced the result. */
-  engine?: { version?: string; [key: string]: unknown };
+  /**
+   * `version` is the @surea11y/core release that produced the result;
+   * `profilesNotRun`, the profiles a scan of several was asked for and did
+   * not run, and why.
+   */
+  engine?: {
+    version?: string;
+    profilesNotRun?: Array<{ profile: string; reason: string }>;
+    [key: string]: unknown;
+  };
   [key: string]: unknown;
 }
 
