@@ -1,6 +1,6 @@
 {
   "name": "@surea11y/test-matchers",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "Fail Jest and Vitest tests on accessibility (a11y, WCAG) violations: expect(container).toHaveNoA11yViolations() for React, Vue, Angular, Svelte or plain DOM component tests in jsdom.",
   "keywords": [
     "accessibility",
@@ -55,8 +55,8 @@
     "LICENSE"
   ],
   "dependencies": {
-    "@surea11y/binding-base": "^1.6.0",
-    "@surea11y/core": "^1.14.0"
+    "@surea11y/binding-base": "^1.7.0",
+    "@surea11y/core": "^1.15.0"
   },
   "peerDependencies": {
     "jest": ">=27.0.0",

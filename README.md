@@ -79,7 +79,7 @@ Your test environment must be jsdom-based — this matcher scans whatever `docum
 npm install --save-dev @surea11y/core @surea11y/test-matchers
 ```
 
-`@surea11y/core` 1.14.0 or later, the engine, comes with this package as a regular dependency, so a project that doesn't list it still works. Listing it yourself, as the line above does, gives your tests and anything else in your project that uses core one shared copy.
+`@surea11y/core` 1.15.0 or later, the engine, comes with this package as a regular dependency, so a project that doesn't list it still works. Listing it yourself, as the line above does, gives your tests and anything else in your project that uses core one shared copy.
 
 **Coming in 2.0:** core becomes a peer dependency, so this package will no longer install it for you. Add `@surea11y/core` to your `package.json` now and 2.0 needs no change.
 
@@ -711,6 +711,14 @@ Scanned with @surea11y/core 1.12.0.
 
 Questions, which only a person can answer: manual-review.
 ```
+
+## What changes with `@surea11y/core` 1.15
+
+With `@surea11y/core` 1.15.0, what a test through this matcher shows differently (core's [`CHANGELOG.md`](https://github.com/SureA11y/core/blob/main/CHANGELOG.md) has the full list):
+
+- **WCAG fails only where WCAG fails.** Where only WAI-ARIA or the HTML content model is broken (an attribute the role doesn't support, an unnamed grid or dialog, a heading in a list), the ARIA and HTML structure rules now ask (`cantTell`, uncertainty `spec-only`) instead of failing, so such a finding no longer fails the assertion. The failure message lists it with the questions, and it keeps its reason code.
+- **Several profiles at once.** `{ profile: ['wcag22-aa', 'wai-aria-1.2'] }`, with the packs that bring them, judges the component by each, and the assertion fails on a profile the scan did not run ([more](#filtering-and-configuring-scans-engineoptions)).
+- **Roles follow WAI-ARIA more closely:** `role="text"` names no role, and an image with a presentational role and a global ARIA attribute keeps its role, so it fails without `alt`.
 
 ## What changes with `@surea11y/core` 1.14
 
