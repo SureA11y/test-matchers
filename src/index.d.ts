@@ -162,9 +162,18 @@ export function installListenerHook(win?: Window): void;
  * Installs @surea11y/core's live-region hook (1.14.0 and later) in the
  * test's jsdom window, so a scan sees what live regions were given and
  * toHaveAnnounced() can read it. Call it in a setup file. `win` defaults
- * to the global `window`.
+ * to the global `window`. jsdom can't open a modal dialog: a test that
+ * stands in for showModal() with `open` and aria-modal="true" passes
+ * `{ assumeModal: true }` (@surea11y/core 1.16.0 and later) to have that
+ * dialog taken as modal, and scans with `engineOptions.assumeModal: true`.
  */
-export function installLiveRegionHook(win?: Window): void;
+export function installLiveRegionHook(win?: Window, options?: LiveRegionHookOptions): void;
+
+/** Options of installLiveRegionHook(). */
+export interface LiveRegionHookOptions {
+  /** Take an open `<dialog aria-modal="true">` as modal, as `engineOptions.assumeModal` does for a scan. Default `false`. */
+  assumeModal?: boolean;
+}
 
 interface A11yCustomMatchers<R = unknown> {
   toHaveNoA11yViolations(

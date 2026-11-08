@@ -79,7 +79,7 @@ Your test environment must be jsdom-based — this matcher scans whatever `docum
 npm install --save-dev @surea11y/core @surea11y/test-matchers
 ```
 
-`@surea11y/core` 1.15.0 or later, the engine, comes with this package as a regular dependency, so a project that doesn't list it still works. Listing it yourself, as the line above does, gives your tests and anything else in your project that uses core one shared copy.
+`@surea11y/core` 1.16.0 or later, the engine, comes with this package as a regular dependency, so a project that doesn't list it still works. Listing it yourself, as the line above does, gives your tests and anything else in your project that uses core one shared copy.
 
 **Coming in 2.0:** core becomes a peer dependency, so this package will no longer install it for you. Add `@surea11y/core` to your `package.json` now and 2.0 needs no change.
 
@@ -300,9 +300,9 @@ Passes when a live region was given `expected` while assistive technology could 
 | `expected` | `string` or `RegExp` (optional) | A string must be the whole text, whitespace collapsed; a RegExp may match part of it. Left out, any announcement passes, and `.not.toHaveAnnounced()` asserts that nothing was announced. |
 | `options.includeBehindModal` | `boolean` (optional) | Also count a text given to a region behind an open modal dialog, which assistive technology did not get. Default `false`. |
 
-### `installInternalsHook(win?)`, `installListenerHook(win?)`, `installLiveRegionHook(win?)`
+### `installInternalsHook(win?)`, `installListenerHook(win?)`, `installLiveRegionHook(win?, options?)`
 
-Opt-in: each installs one of core's hooks in the test's jsdom window, recorded as early. Call them once in your setup file (see [Setup file with the hooks](#setup-file-with-the-hooks)), before any component is defined. `win` defaults to the global `window`; anything that isn't a jsdom window throws a `TypeError`. See [Web components](#web-components-names-set-through-elementinternals), [the listener hook](#click-handlers-added-from-script-the-listener-hook) and [the live-region hook](#live-regions-the-live-region-hook-and-tohaveannounced).
+Opt-in: each installs one of core's hooks in the test's jsdom window, recorded as early. Call them once in your setup file (see [Setup file with the hooks](#setup-file-with-the-hooks)), before any component is defined. `win` defaults to the global `window`; anything that isn't a jsdom window throws a `TypeError`. `installLiveRegionHook()` takes `options.assumeModal` (`boolean`, default `false`, `@surea11y/core` 1.16.0 and later): an open `<dialog aria-modal="true">` is taken as modal, for a test that stands in for `showModal()` ([Behind a modal dialog](#modal-dialogs-in-jsdom)); another option, or a value that isn't a boolean, throws a `TypeError`. See [Web components](#web-components-names-set-through-elementinternals), [the listener hook](#click-handlers-added-from-script-the-listener-hook) and [the live-region hook](#live-regions-the-live-region-hook-and-tohaveannounced).
 
 ## Failing only on serious problems
 
@@ -649,11 +649,23 @@ Things to know:
 - **What was given, not what was said.** It's what the page made available to announce while assistive technology could reach the region, as core's `getAnnouncements(window)` returns it, not what a screen reader said, which depends on the screen reader. A string must be the whole text (whitespace collapsed); a RegExp may match part of it.
 - **Changes are read in batches.** The hook reads changes as a `MutationObserver` delivers them, in batches. What a test does with no `await` in between is one batch, so a region rendered and filled in it was added with its text: it's no announcement, and the scan asks about it. Render, then act: `await user.click()` (Testing Library's `user-event`), or any `await` between the two, ends the batch, as a real user's click does.
 - **On an element**, only the regions it is or contains count, so `expect(container)` looks at the component you rendered. A region that has since left the page (a toast that came and went) is in no element: assert on `document` or `window` to see it. Those cover every announcement since the hook was installed in that window, earlier tests' in the same file included.
-- **Behind a modal dialog.** A text given to a region behind an open modal `<dialog>` didn't reach assistive technology: it isn't counted unless you pass `{ includeBehindModal: true }`, and the failure message lists it either way. jsdom has no `showModal()`, so this only arises where a test provides one.
+- **Behind a modal dialog.** A text given to a region behind an open modal `<dialog>` didn't reach assistive technology: it isn't counted unless you pass `{ includeBehindModal: true }`, and the failure message lists it either way. A modal dialog is one opened with `showModal()`, which jsdom doesn't have, so this only arises where a test provides one, or installs the hook with `{ assumeModal: true }` ([Modal dialogs in jsdom](#modal-dialogs-in-jsdom)).
 - **Shadow roots.** The hook watches the document, not inside shadow roots: a live region inside a web component's shadow root isn't recorded.
 - **Without the hook**, `toHaveAnnounced()` throws, rather than passing or failing on nothing.
 
 The hook only observes, with one `MutationObserver`; see core's [`INTEGRATION.md`](https://github.com/SureA11y/core/blob/main/docs/INTEGRATION.md#seeing-what-live-regions-are-given-the-live-region-hook).
+
+### Modal dialogs in jsdom
+
+A dialog opened with `showModal()` makes the page behind it inert: the scan doesn't judge it, and a live region there gets no announcement through. jsdom has no `showModal()`, and from `@surea11y/core` 1.16.0 an open `<dialog aria-modal="true">` isn't taken as modal under jsdom, as it isn't in a browser. A test that stands in for `showModal()` by setting `open` and `aria-modal="true"` says so to both:
+
+```js
+// setup file
+installLiveRegionHook(window, { assumeModal: true });
+
+// in a test
+expect(container).toHaveNoA11yViolations({ assumeModal: true });
+```
 
 ## Failure messages
 
@@ -711,6 +723,15 @@ Scanned with @surea11y/core 1.12.0.
 
 Questions, which only a person can answer: manual-review.
 ```
+
+## What changes with `@surea11y/core` 1.16
+
+With `@surea11y/core` 1.16.0, what a test through this matcher shows differently (core's [`CHANGELOG.md`](https://github.com/SureA11y/core/blob/main/CHANGELOG.md) has the full list):
+
+- **An open `<dialog aria-modal="true">` is no longer modal under jsdom.** Only `showModal()` makes the page behind a dialog inert, as in a browser, so a test that opens a dialog by setting `open` and `aria-modal="true"` now sees findings behind it, and `toHaveAnnounced()` counts what a region behind it was given. Pass `{ assumeModal: true }` to the scan and to `installLiveRegionHook()` to have it taken as modal again ([Modal dialogs in jsdom](#modal-dialogs-in-jsdom)).
+- **Profiles for WCAG 2.0 and 2.1**, beside 2.2's: `{ profile: 'wcag21-aa' }` and the others judge the component by that version and level, and `section508` is deprecated for `wcag20-aa`, which gives the same results.
+- **Messages describe the check** instead of naming the WCAG criterion it maps to, so a test that matches a failure message's text may need the new wording. A finding's `wcagSc` and `failWhen` are unchanged.
+- **Hidden under jsdom as in a browser:** an element hidden by a rule in `@layer` (Tailwind v4's `hidden`, `sr-only`), `@supports` or `@container`, or with `clip: rect(0 0 0 0)`, is taken as hidden, so a hidden control no longer fails as shown.
 
 ## What changes with `@surea11y/core` 1.15
 
@@ -797,6 +818,7 @@ This package tests itself under both frameworks it supports:
 - [`tests/internals-hook.test.js`](./tests/internals-hook.test.js) and [`tests/internals-hook.vitest.test.js`](./tests/internals-hook.vitest.test.js) — `installInternalsHook()` under each runner: the hook records itself early and a component with no internals is no longer a question; under Vitest, a component that names itself through private internals passes.
 - [`tests/listener-hook.test.js`](./tests/listener-hook.test.js) and [`tests/listener-hook.vitest.test.js`](./tests/listener-hook.vitest.test.js) — `installListenerHook()` under each runner: it records itself early, a button that only listens for clicks fails and one that also listens for keys passes.
 - [`tests/live-region-hook.test.js`](./tests/live-region-hook.test.js) and [`tests/live-region-hook.vitest.test.js`](./tests/live-region-hook.vitest.test.js) — `installLiveRegionHook()` and `toHaveAnnounced()` under each runner: what a status region is given is announced, a region added with its text isn't and leans fail, and an element scopes the assertion. [`tests/announced.test.js`](./tests/announced.test.js) covers the messages, a text behind a modal dialog and the argument checks on announcements given directly.
+- [`tests/live-region-hook-assume-modal.test.js`](./tests/live-region-hook-assume-modal.test.js) and [`tests/live-region-hook-assume-modal.vitest.test.js`](./tests/live-region-hook-assume-modal.vitest.test.js) — `installLiveRegionHook(window, { assumeModal: true })`: a text given behind an open `<dialog aria-modal="true">` counts only with `includeBehindModal`, and the scan judges the page behind it unless `engineOptions.assumeModal` is set.
 - [`tests/types.test.js`](./tests/types.test.js) — compiles [`tests/types/usage.ts`](./tests/types/usage.ts) with `tsc --strict` against `@surea11y/core`'s own types, so the bundled `.d.ts` can't drift from the engine's.
 - [`tests/matcher.vitest.test.js`](./tests/matcher.vitest.test.js) — proves the same matcher, completely unmodified, integrates correctly with Vitest's own `expect.extend` (registration, `.not`, `engineOptions` and `runOnly` passthrough, the options form with `leanFail`, packs, precomputed-result assertions, thrown `TypeError`), so this isn't just a documentation claim.
 
