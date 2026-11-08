@@ -41,6 +41,10 @@ installInternalsHook(window);
 installListenerHook();
 installListenerHook(window);
 installLiveRegionHook(window);
+installLiveRegionHook(window, { assumeModal: true });
+installLiveRegionHook(undefined, {});
+// @ts-expect-error assumeModal is a boolean
+installLiveRegionHook(window, { assumeModal: 'yes' });
 
 const leaning: A11yMatcherOptions = { engineOptions: options, runOnly: wcag22, leanFail: true, wcagOnly: true };
 const withLeans = toHaveNoA11yViolations(container, leaning);

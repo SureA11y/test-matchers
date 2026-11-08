@@ -8,7 +8,10 @@
 //   - the listener hook (core 1.14.0), so the keyboard rules see the click,
 //     key, focus and mouse listeners added from script;
 //   - the live-region hook (core 1.14.0), which records what live regions
-//     are given, for the scan and for getAnnouncements().
+//     are given, for the scan and for getAnnouncements(). jsdom can't open
+//     a modal dialog, so a test that stands in for showModal() with `open`
+//     and aria-modal="true" installs it with { assumeModal: true } (core
+//     1.16.0), as it scans with engineOptions.assumeModal.
 //
 // Meant for a Jest or Vitest setup file, which runs before the test file
 // defines any component or adds any listener: the hook then sees all of it.
@@ -29,7 +32,7 @@ const HOOKS = {
   installLiveRegionHook: { script: 'liveRegionHookScript', since: '1.14.0' }
 };
 
-function installHook(name, win) {
+function installHook(name, win, scriptOptions = {}) {
   if (!win || typeof win !== 'object' || !win.document || typeof win.Function !== 'function') {
     throw new TypeError(
       `${name}(): no jsdom window to install the hook in. ` +
@@ -41,7 +44,7 @@ function installHook(name, win) {
   if (typeof hookScript !== 'function') {
     throw new Error(`${name}(): needs @surea11y/core ${since} or later.`);
   }
-  new win.Function(hookScript({ early: true }))();
+  new win.Function(hookScript({ ...scriptOptions, early: true }))();
 }
 
 function defaultWindow() {
@@ -63,8 +66,26 @@ function installListenerHook(win = defaultWindow()) {
   installHook('installListenerHook', win);
 }
 
-function installLiveRegionHook(win = defaultWindow()) {
-  installHook('installLiveRegionHook', win);
+function installLiveRegionHook(win = defaultWindow(), options = undefined) {
+  const { assumeModal } = readLiveRegionOptions(options);
+  installHook('installLiveRegionHook', win, assumeModal ? { assumeModal } : {});
+}
+
+function readLiveRegionOptions(options) {
+  if (options === undefined || options === null) return { assumeModal: false };
+  if (typeof options !== 'object' || Array.isArray(options)) {
+    throw new TypeError('installLiveRegionHook(win, options): options must be an object, such as { assumeModal: true }.');
+  }
+  const unknown = Object.keys(options).filter((k) => k !== 'assumeModal');
+  if (unknown.length) {
+    throw new TypeError(
+      `installLiveRegionHook(win, options): no option named ${unknown.map((k) => `"${k}"`).join(', ')}; use assumeModal.`
+    );
+  }
+  if (options.assumeModal !== undefined && typeof options.assumeModal !== 'boolean') {
+    throw new TypeError('installLiveRegionHook(win, options): assumeModal must be true or false.');
+  }
+  return { assumeModal: options.assumeModal === true };
 }
 
 module.exports = { installInternalsHook, installListenerHook, installLiveRegionHook };
