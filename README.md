@@ -502,7 +502,7 @@ A `cantTell` is a question for a person: the engine couldn't prove the answer fr
 A failure message lists the questions after the failures, by review group: those that likely fail, then those that likely pass, each with its lean, then the open ones, which only a person can answer, by rule ([Failure messages](#failure-messages) shows one). `{ howToCheck: true }` lists every question in full, with its steps:
 
 ```
-1) heading-order (minor, likely fails): This heading jumps from level 1 to level 3, skipping a level.
+1) heading-order (minor, likely fails): This level-3 heading "Notifications" follows the level-1 heading "Settings", skipping a level.
    at body > main > h3
    Go down one level at a time, so an <h2> is followed by an <h3> rather than an <h4>, and the outline of the page stays easy to follow.
    Why it likely fails: The heading skips a level after the one before it.
@@ -525,7 +525,7 @@ test('the settings page has no failures or likely failures', () => {
 ```
 expected no accessibility violations or likely failures, but found 1 likely failure:
 
-1) heading-order (minor, likely fails): This heading jumps from level 1 to level 3, skipping a level.
+1) heading-order (minor, likely fails): This level-3 heading "Notifications" follows the level-1 heading "Settings", skipping a level.
    ...
 ```
 
@@ -678,11 +678,11 @@ expected no accessibility violations, but found 1:
    at body > main > img
    Add an alt attribute that says what the image shows, or alt="" if the image is purely decorative.
 
-Scanned with @surea11y/core 1.14.0.
+Scanned with @surea11y/core 1.17.0.
 
 2 findings need manual review (cantTell, not counted as failures):
 
-1) heading-order (minor, likely fails): This heading jumps from level 1 to level 3, skipping a level.
+1) heading-order (minor, likely fails): This level-3 heading "Notifications" follows the level-1 heading "Settings", skipping a level.
    at body > main > h3
    Go down one level at a time, so an <h2> is followed by an <h3> rather than an <h4>, and the outline of the page stays easy to follow.
    Why it likely fails: The heading skips a level after the one before it.
