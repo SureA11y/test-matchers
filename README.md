@@ -79,7 +79,7 @@ Your test environment must be jsdom-based — this matcher scans whatever `docum
 npm install --save-dev @surea11y/core @surea11y/test-matchers
 ```
 
-`@surea11y/core` 1.16.0 or later, the engine, comes with this package as a regular dependency, so a project that doesn't list it still works. Listing it yourself, as the line above does, gives your tests and anything else in your project that uses core one shared copy.
+`@surea11y/core` 1.18.0 or later, the engine, comes with this package as a regular dependency, so a project that doesn't list it still works. Listing it yourself, as the line above does, gives your tests and anything else in your project that uses core one shared copy.
 
 **Coming in 2.0:** core becomes a peer dependency, so this package will no longer install it for you. Add `@surea11y/core` to your `package.json` now and 2.0 needs no change.
 
@@ -725,6 +725,17 @@ Scanned with @surea11y/core 1.12.0.
 
 Questions, which only a person can answer: manual-review.
 ```
+
+## What changes with `@surea11y/core` 1.17 and 1.18
+
+With `@surea11y/core` 1.18.0, what a test through this matcher shows differently from 1.16 (core's [`CHANGELOG.md`](https://github.com/SureA11y/core/blob/main/CHANGELOG.md) has the full list):
+
+- **A time budget fails a scan cut short.** `{ timeBudgetMs }` stops the scan starting rules once it has spent that long, and the assertion then fails, naming them ([more](#scans-that-left-something-out)), so a test can't pass on rules that never ran. `{ output: { maxOccurrencesPerRule } }` keeps at most that many occurrences per rule in the result, without changing what fails.
+- **Without a layout, contrast asks instead of guessing.** Under jsdom, text over a drawn SVG shape or a `::before`/`::after` that may lie under it is now a question (`cantTell`), not a guess, so such a finding fails the assertion only with `leanFail`.
+- **New rules.** `form-group-name-present` (1.3.1) asks about radio buttons and checkboxes that share a name but sit in no named group. The new rules that measure layout (`target-size-enhanced`, `focus-not-obscured-minimum` and `-enhanced`, `reflow-horizontal-scroll`, `resize-text-content-loss`) have nothing to measure under jsdom and are `notApplicable`, as `target-size-minimum` is.
+- **Results you may notice.** A video with a poster and no name, and a list item whose list's role replaces list, now ask instead of failing; `aria-disabled` exempts contrast only on controls. Messages name the root cause (why an element has no name, a likely typo in a role or attribute), so a test that matches a message's text may need the new wording; outcomes and reason codes are unchanged.
+- **Packs.** A pack whose `core` range leaves out 1.18 (such as `~1.17.0`) doesn't run, and the assertion fails, naming it; widen its range to `^1.18.0`.
+- **Stricter options.** More engine option values are checked, with a warning, and refused under `strictOptions: true`.
 
 ## What changes with `@surea11y/core` 1.16
 
