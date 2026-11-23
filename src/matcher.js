@@ -7,11 +7,12 @@ const { scanElement, SCOPE_ATTR } = require('./scan-element');
 // Scan gaps (binding-base's getScanGaps()) that fail the assertion: a scope
 // that matched nothing means nothing was checked, and a custom rule or a
 // pack that did not run cannot have passed, nor a profile a scan of several
-// was asked for and did not judge the page by. Each would otherwise read as
-// a clean scan. The CLI exits 2 on a scope that matches nothing.
-// `context-partly-not-found` (some of several selectors matched nothing) is
-// only reported: the rest was scanned.
-const FAILING_GAPS = ['context-not-found', 'custom-rule-skipped', 'pack-skipped', 'profile-not-run'];
+// was asked for and did not judge the page by, nor a scan its time budget
+// (engineOptions.timeBudgetMs, core 1.18.0) cut short before every rule had
+// started. Each would otherwise read as a clean scan. The CLI exits 2 on a
+// scope that matches nothing. `context-partly-not-found` (some of several
+// selectors matched nothing) is only reported: the rest was scanned.
+const FAILING_GAPS = ['context-not-found', 'custom-rule-skipped', 'pack-skipped', 'profile-not-run', 'scan-incomplete'];
 
 const DETACHED_NOTE =
   'The element given to toHaveNoA11yViolations() is not in the document the scan runs in ' +

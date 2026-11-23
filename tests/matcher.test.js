@@ -455,6 +455,47 @@ const profileLists = (() => {
   });
 });
 
+// A scan its time budget cut short (core 1.18.0) fails the assertion, as a
+// skipped pack does: the rules it didn't start checked nothing. Needs a core
+// with the budget and a binding-base that reports the gap.
+const timeBudget = (() => {
+  const warn = console.warn;
+  console.warn = () => {};
+  try {
+    document.body.innerHTML = '<main><h1>Hi</h1></main>';
+    const result = scanElement(document, { timeBudgetMs: 1 });
+    const { getScanGaps } = require('@surea11y/binding-base');
+    return getScanGaps(result).some((g) => g.kind === 'scan-incomplete');
+  } catch {
+    return false;
+  } finally {
+    console.warn = warn;
+  }
+})();
+
+(timeBudget ? describe : describe.skip)('a time budget', () => {
+  beforeEach(() => {
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    console.warn.mockRestore();
+  });
+
+  test('a scan the budget cut short fails the assertion, saying so', () => {
+    document.body.innerHTML = '<main><h1>Hi</h1></main>';
+    const { pass, message } = toHaveNoA11yViolations(document, { timeBudgetMs: 1 });
+    expect(pass).toBe(false);
+    expect(message()).toMatch(/left out what it was asked to check/);
+    expect(message()).toMatch(/The scan was cut short: its time budget of 1 ms ran out/);
+  });
+
+  test('a budget the scan stays within, and nothing found, passes', () => {
+    document.body.innerHTML = '<main><h1>Hi</h1></main>';
+    const { pass } = toHaveNoA11yViolations(document, { timeBudgetMs: 60000 });
+    expect(pass).toBe(true);
+  });
+});
+
 // One profile, or a list of one, that the scan didn't apply fails the
 // assertion as a list's does: core scans it by the default rules and lists
 // no profile not run for it. Needs a binding-base that reports the gap.
